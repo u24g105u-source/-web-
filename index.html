@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>迷子になった文字</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #fff;
+    font-family: Arial, "Noto Sans JP", sans-serif;
+}
+
+
+/* =========================
+   输入区域
+========================= */
+
+#inputArea {
+
+    position: fixed;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 14px;
+
+    z-index: 100;
+
+    width: 100%;
+}
+
+
+/* =========================
+   输入框
+========================= */
+
+#textInput {
+
+    width: 420px;
+    max-width: 80vw;
+
+    min-height: 42px;
+    max-height: 120px;
+
+    padding: 8px 4px;
+
+    border: none;
+    border-bottom: 1px solid #222;
+
+    background: transparent;
+
+    font-size: 18px;
+    line-height: 1.6;
+
+    text-align: center;
+
+    outline: none;
+
+    resize: none;
+
+    overflow-y: hidden;
+
+    font-family:
+        Arial,
+        "Noto Sans JP",
+        sans-serif;
+
+    display: block;
+}
+
+
+#textInput::placeholder {
+
+    color: #999;
+
+    opacity: 1;
+}
+
+
+#textInput:focus {
+
+    border-bottom: 1px solid #222;
+}
+
+#charCount {
+
+    font-size: 12px;
+
+    color: #999;
+
+    line-height: 1;
+
+    margin-top: -4px;
+
+    text-align: center;
+}
+
+/* =========================
+   开始按钮
+========================= */
+
+#startButton {
+
+    padding: 10px 30px;
+
+    border: 1px solid #222;
+
+    background: white;
+
+    font-size: 15px;
+
+    cursor: pointer;
+}
+
+
+#startButton:hover {
+
+    background: #111;
+
+    color: white;
+}
+
+
+/* =========================
+   文字
+========================= */
+
+.particle {
+
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    font-size: 18px;
+
+    line-height: 1;
+
+    color: #111;
+
+    pointer-events: none;
+
+    user-select: none;
+
+    white-space: nowrap;
+
+    will-change:
+        transform,
+        opacity;
+}
+
+
+/* =========================
+   状态文字
+========================= */
+
+#status {
+
+    position: fixed;
+
+    bottom: 20px;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    font-size: 12px;
+
+    color: #888;
+
+    opacity: 0;
+
+    pointer-events: none;
+
+    transition: opacity .5s;
+}
+
+</style>
+</head>
+
+
+<body>
+
+
+<div id="inputArea">
+
+    <textarea
+        id="textInput"
+        maxlength="100"
+        placeholder="文字を入力してください"
+        rows="1"
+    ></textarea>
+
+<div id="charCount">0 / 100</div>
+
+    <button id="startButton">
+        迷子にする
+    </button>
+
+</div>
+
+
+<div id="status"></div>
+
+
+<script>
+
+
+/* =====================================================
+   基本设置
+===================================================== */
+
+const inputArea =
+    document.getElementById("inputArea");
+
+const input =
+    document.getElementById("textInput");
+
+const charCount =
+    document.getElementById("charCount");
+
+const startButton =
+    document.getElementById("startButton");
+
+const statusText =
+    document.getElementById("status");
+
+
+let particles = [];
+
+let started = false;
+
+let phase = "wander";
+
+let phaseStart = 0;
+
+let lastTime = 0;
+
+
+/* =====================================================
+   图案
+===================================================== */
+
+const shapes = [
+
+    "apple",
+
+    "cup",
+
+    "house",
+
+    "key",
+
+    "flower"
+
+];
+
+
+let shapeIndex = 0;
+
+
+/* =====================================================
+   图案大小
+===================================================== */
+
+const SHAPE_SIZE_RATIO = 0.55;
+
+
+/* =====================================================
+   时间
+===================================================== */
+
+const WANDER_TIME = 5000;
+
+const FORM_TIME = 5000;
+
+const DISSOLVE_TIME = 3000;
+
+
+/* =====================================================
+   文字大小
+===================================================== */
+
+const FONT_SIZE = 18;
+
+
+/* =====================================================
+   目标点
+===================================================== */
+
+let targetPoints = [];
+
+
+/* =====================================================
+   输入文字
+===================================================== */
+
+function getInputCharacters() {
+
+    let text =
+        input.value.trim();
+
+    if (!text) {
+
+        text = "文字";
+    }
+
+    return [...text];
+}
+
+
+/* =====================================================
+   自动调整输入框高度
+===================================================== */
+
+input.addEventListener(
+    "input",
+    () => {
+
+        /* 自动调整输入框高度 */
+
+        input.style.height =
+            "auto";
+
+        input.style.height =
+            Math.min(
+                input.scrollHeight,
+                120
+            ) + "px";
+
+
+        /* 更新字数 */
+
+        charCount.textContent =
+            `${input.value.length} / 100`;
+
+    }
+);
+
+/* =====================================================
+   创建文字
+===================================================== */
+
+function createParticle(
+    char,
+    x,
+    y,
+    outside = false
+) {
+
+    const el =
+        document.createElement("div");
+
+    el.className =
+        "particle";
+
+    el.textContent =
+        char;
+
+    document.body.appendChild(el);
+
+
+    const particle = {
+
+        el: el,
+
+        char: char,
+
+        x: x,
+
+        y: y,
+
+        vx:
+            (Math.random() - 0.5)
+            * 0.4,
+
+        vy:
+            (Math.random() - 0.5)
+            * 0.4,
+
+        tx: x,
+
+        ty: y,
+
+        active: true,
+
+        outside: outside,
+
+        opacity: 1,
+
+        seed:
+            Math.random() * 10000
+    };
+
+
+    particles.push(
+        particle
+    );
+
+
+    return particle;
+}
+
+
+/* =====================================================
+   从画面外生成文字
+===================================================== */
+
+function createOutsideParticle(char) {
+
+    const side =
+        Math.floor(
+            Math.random() * 4
+        );
+
+
+    const margin = 100;
+
+    let x;
+    let y;
+
+
+    if (side === 0) {
+
+        x = -margin;
+
+        y =
+            Math.random()
+            * window.innerHeight;
+    }
+
+
+    if (side === 1) {
+
+        x =
+            window.innerWidth
+            + margin;
+
+        y =
+            Math.random()
+            * window.innerHeight;
+    }
+
+
+    if (side === 2) {
+
+        x =
+            Math.random()
+            * window.innerWidth;
+
+        y = -margin;
+    }
+
+
+    if (side === 3) {
+
+        x =
+            Math.random()
+            * window.innerWidth;
+
+        y =
+            window.innerHeight
+            + margin;
+    }
+
+
+    const p =
+        createParticle(
+            char,
+            x,
+            y,
+            true
+        );
+
+
+    const cx =
+        window.innerWidth / 2;
+
+    const cy =
+        window.innerHeight / 2;
+
+
+    const dx =
+        cx - x;
+
+    const dy =
+        cy - y;
+
+
+    const distance =
+        Math.sqrt(
+            dx * dx +
+            dy * dy
+        );
+
+
+    p.vx =
+        dx / distance
+        * 0.45;
+
+    p.vy =
+        dy / distance
+        * 0.45;
+
+
+    return p;
+}
+
+
+/* =====================================================
+   开始
+===================================================== */
+
+function start() {
+
+    if (started)
+        return;
+
+
+    started = true;
+
+
+    inputArea.style.display =
+        "none";
+
+
+    const chars =
+        getInputCharacters();
+
+
+    const cx =
+        window.innerWidth / 2;
+
+    const cy =
+        window.innerHeight / 2;
+
+
+    chars.forEach(
+        (char, index) => {
+
+            const angle =
+                Math.PI * 2
+                * index
+                / chars.length;
+
+
+            const radius =
+                Math.min(
+                    chars.length * 5,
+                    100
+                );
+
+
+            const x =
+                cx +
+                Math.cos(angle)
+                * radius;
+
+
+            const y =
+                cy +
+                Math.sin(angle)
+                * radius;
+
+
+            createParticle(
+                char,
+                x,
+                y
+            );
+        }
+    );
+
+
+    phase =
+        "wander";
+
+
+    phaseStart =
+        performance.now();
+
+
+    showStatus(
+        "文字が迷子になっています……"
+    );
+
+
+    requestAnimationFrame(
+        loop
+    );
+}
+
+
+/* =====================================================
+   生成图案轮廓
+===================================================== */
+
+function generateShape(type) {
+
+    const points = [];
+
+
+    const cx =
+        window.innerWidth / 2;
+
+    const cy =
+        window.innerHeight / 2;
+
+
+    const scale =
+        Math.min(
+            window.innerWidth,
+            window.innerHeight
+        )
+        * SHAPE_SIZE_RATIO
+        / 2;
+
+
+    /* =========================
+       苹果
+    ========================= */
+
+    if (type === "apple") {
+
+        const count = 110;
+
+
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
+
+            const t =
+                Math.PI * 2
+                * i
+                / count;
+
+
+            let x =
+                Math.cos(t)
+                * scale
+                * 0.85;
+
+
+            let y =
+                Math.sin(t)
+                * scale
+                * 0.9;
+
+
+            if (
+                y < -scale * 0.45 &&
+                Math.abs(x)
+                < scale * 0.3
+            ) {
+
+                y +=
+                    scale
+                    * 0.13
+                    *
+                    (
+                        1 -
+                        Math.abs(x)
+                        /
+                        (scale * 0.3)
+                    );
+            }
+
+
+            points.push({
+
+                x:
+                    cx + x,
+
+                y:
+                    cy + y
+
+            });
+        }
+
+
+        for (
+            let i = 0;
+            i < 15;
+            i++
+        ) {
+
+            points.push({
+
+                x:
+                    cx +
+                    i * 2,
+
+                y:
+                    cy -
+                    scale * 0.92 -
+                    i * 3
+
+            });
+        }
+    }
+
+
+    /* =========================
+       杯子
+    ========================= */
+
+    if (type === "cup") {
+
+        const width =
+            scale * 1.35;
+
+        const height =
+            scale * 1.25;
+
+
+        for (
+            let i = 0;
+            i < 50;
+            i++
+        ) {
+
+            const t =
+                Math.PI * 2
+                * i
+                / 50;
+
+
+            points.push({
+
+                x:
+                    cx +
+                    Math.cos(t)
+                    * width
+                    * 0.5,
+
+                y:
+                    cy -
+                    height * 0.45 +
+                    Math.sin(t)
+                    * 10
+
+            });
+        }
+
+
+        for (
+            let i = 0;
+            i < 45;
+            i++
+        ) {
+
+            const t =
+                i / 44;
+
+
+            const y =
+                cy -
+                height * 0.45 +
+                height * 0.9 * t;
+
+
+            const ratio =
+                1 -
+                0.18 * t;
+
+
+            points.push({
+
+                x:
+                    cx -
+                    width * 0.5
+                    * ratio,
+
+                y: y
+
+            });
+
+
+            points.push({
+
+                x:
+                    cx +
+                    width * 0.5
+                    * ratio,
+
+                y: y
+
+            });
+        }
+
+
+        for (
+            let i = 0;
+            i < 35;
+            i++
+        ) {
+
+            const t =
+                Math.PI
+                * i
+                / 34;
+
+
+            points.push({
+
+                x:
+                    cx +
+                    Math.cos(t)
+                    * width
+                    * 0.42,
+
+                y:
+                    cy +
+                    height * 0.45 +
+                    Math.sin(t)
+                    * 8
+
+            });
+        }
+
+
+        for (
+            let i = 0;
+            i < 30;
+            i++
+        ) {
+
+            const t =
+                Math.PI * 1.5 +
+                Math.PI * i / 29;
+
+
+            points.push({
+
+                x:
+                    cx +
+                    width * 0.55 +
+                    Math.cos(t)
+                    * width
+                    * 0.4,
+
+                y:
+                    cy +
+                    Math.sin(t)
+                    * height
+                    * 0.3
+
+            });
+        }
+    }
+
+
+    /* =========================
+       房子
+    ========================= */
+
+    if (type === "house") {
+
+        const w =
+            scale * 1.55;
+
+        const h =
+            scale * 1.3;
+
+
+        const roof = [
+
+            {
+                x: cx,
+                y: cy - h
+            },
+
+            {
+                x:
+                    cx -
+                    w * 0.7,
+
+                y:
+                    cy -
+                    h * 0.35
+            },
+
+            {
+                x:
+                    cx -
+                    w * 0.7,
+
+                y:
+                    cy +
+                    h * 0.65
+            },
+
+            {
+                x:
+                    cx +
+                    w * 0.7,
+
+                y:
+                    cy +
+                    h * 0.65
+            },
+
+            {
+                x:
+                    cx +
+                    w * 0.7,
+
+                y:
+                    cy -
+                    h * 0.35
+            },
+
+            {
+                x: cx,
+                y: cy - h
+            }
+        ];
+
+
+        for (
+            let i = 0;
+            i < roof.length - 1;
+            i++
+        ) {
+
+            addLine(
+                points,
+                roof[i],
+                roof[i + 1],
+                25
+            );
+        }
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx -
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.65
+            },
+
+            {
+                x:
+                    cx -
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.05
+            },
+
+            15
+        );
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx +
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.65
+            },
+
+            {
+                x:
+                    cx +
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.05
+            },
+
+            15
+        );
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx -
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.05
+            },
+
+            {
+                x:
+                    cx +
+                    w * 0.16,
+
+                y:
+                    cy +
+                    h * 0.05
+            },
+
+            12
+        );
+    }
+
+
+    /* =========================
+       钥匙
+    ========================= */
+
+    if (type === "key") {
+
+        const r =
+            scale * 0.32;
+
+
+        for (
+            let i = 0;
+            i < 60;
+            i++
+        ) {
+
+            const t =
+                Math.PI * 2
+                * i
+                / 60;
+
+
+            points.push({
+
+                x:
+                    cx -
+                    scale * 0.45 +
+                    Math.cos(t) * r,
+
+                y:
+                    cy +
+                    Math.sin(t) * r
+
+            });
+        }
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx -
+                    scale * 0.12,
+
+                y: cy
+            },
+
+            {
+                x:
+                    cx +
+                    scale * 0.85,
+
+                y: cy
+            },
+
+            45
+        );
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx +
+                    scale * 0.48,
+
+                y: cy
+            },
+
+            {
+                x:
+                    cx +
+                    scale * 0.48,
+
+                y:
+                    cy +
+                    scale * 0.28
+            },
+
+            14
+        );
+
+
+        addLine(
+
+            points,
+
+            {
+                x:
+                    cx +
+                    scale * 0.72,
+
+                y: cy
+            },
+
+            {
+                x:
+                    cx +
+                    scale * 0.72,
+
+                y:
+                    cy +
+                    scale * 0.22
+            },
+
+            12
+        );
+    }
+
+
+    /* =========================
+       花
+    ========================= */
+
+    if (type === "flower") {
+
+        const petals = 5;
+
+
+        for (
+            let p = 0;
+            p < petals;
+            p++
+        ) {
+
+            const angle =
+                Math.PI * 2
+                * p
+                / petals;
+
+
+            const px =
+                cx +
+                Math.cos(angle)
+                * scale
+                * 0.36;
+
+
+            const py =
+                cy +
+                Math.sin(angle)
+                * scale
+                * 0.36;
+
+
+            for (
+                let i = 0;
+                i < 35;
+                i++
+            ) {
+
+                const t =
+                    Math.PI * 2
+                    * i
+                    / 35;
+
+
+                points.push({
+
+                    x:
+                        px +
+                        Math.cos(t)
+                        * scale
+                        * 0.38,
+
+                    y:
+                        py +
+                        Math.sin(t)
+                        * scale
+                        * 0.38
+
+                });
+            }
+        }
+
+
+        for (
+            let i = 0;
+            i < 30;
+            i++
+        ) {
+
+            const t =
+                Math.PI * 2
+                * i
+                / 30;
+
+
+            points.push({
+
+                x:
+                    cx +
+                    Math.cos(t)
+                    * scale
+                    * 0.16,
+
+                y:
+                    cy +
+                    Math.sin(t)
+                    * scale
+                    * 0.16
+
+            });
+        }
+    }
+
+
+    return points;
+}
+
+
+/* =====================================================
+   线段
+===================================================== */
+
+function addLine(
+    points,
+    a,
+    b,
+    count
+) {
+
+    for (
+        let i = 0;
+        i < count;
+        i++
+    ) {
+
+        const t =
+            i /
+            Math.max(
+                1,
+                count - 1
+            );
+
+
+        points.push({
+
+            x:
+                a.x +
+                (b.x - a.x)
+                * t,
+
+            y:
+                a.y +
+                (b.y - a.y)
+                * t
+
+        });
+    }
+}
+
+
+/* =====================================================
+   优化轮廓点
+===================================================== */
+
+function optimizePoints(points) {
+
+    const result = [];
+
+    const minDistance =
+        FONT_SIZE * 1.15;
+
+
+    for (
+        const point of points
+    ) {
+
+        let valid = true;
+
+
+        for (
+            const p of result
+        ) {
+
+            const dx =
+                point.x - p.x;
+
+            const dy =
+                point.y - p.y;
+
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+
+            if (
+                distance <
+                minDistance
+            ) {
+
+                valid = false;
+
+                break;
+            }
+        }
+
+
+        if (valid) {
+
+            result.push(
+                point
+            );
+        }
+    }
+
+
+    return result;
+}
+
+
+/* =====================================================
+   设置新的图案
+===================================================== */
+
+function setShape() {
+
+    let points =
+        generateShape(
+            shapes[shapeIndex]
+        );
+
+
+    points =
+        optimizePoints(
+            points
+        );
+
+
+    targetPoints =
+        points;
+
+
+    const active =
+        particles.filter(
+            p => p.active
+        );
+
+
+    /*
+        多出的文字飞出画面
+    */
+
+    if (
+        active.length >
+        points.length
+    ) {
+
+        const extras =
+            active.slice(
+                points.length
+            );
+
+
+        extras.forEach(
+            p => {
+
+                p.active = false;
+
+
+                const cx =
+                    window.innerWidth
+                    / 2;
+
+                const cy =
+                    window.innerHeight
+                    / 2;
+
+
+                const dx =
+                    p.x - cx;
+
+                const dy =
+                    p.y - cy;
+
+
+                const distance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    ) || 1;
+
+
+                p.vx =
+                    dx /
+                    distance *
+                    2.2;
+
+                p.vy =
+                    dy /
+                    distance *
+                    2.2;
+            }
+        );
+    }
+
+
+    let usable =
+        particles.filter(
+            p => p.active
+        );
+
+
+    /*
+        文字不足时
+        从画面外补充
+    */
+
+    const chars =
+        getInputCharacters();
+
+
+    while (
+        usable.length <
+        points.length
+    ) {
+
+        const char =
+            chars[
+                Math.floor(
+                    Math.random()
+                    * chars.length
+                )
+            ];
+
+
+        const p =
+            createOutsideParticle(
+                char
+            );
+
+
+        usable.push(
+            p
+        );
+    }
+
+
+    const finalParticles =
+        particles.filter(
+            p => p.active
+        );
+
+
+    for (
+        let i = 0;
+        i < points.length;
+        i++
+    ) {
+
+        finalParticles[i].tx =
+            points[i].x;
+
+        finalParticles[i].ty =
+            points[i].y;
+    }
+
+
+    showStatus(
+        "文字が集まっています……"
+    );
+}
+
+
+/* =====================================================
+   文字游走
+===================================================== */
+
+function wander(
+    p,
+    time
+) {
+
+    if (p.outside) {
+
+        const cx =
+            window.innerWidth / 2;
+
+        const cy =
+            window.innerHeight / 2;
+
+
+        const dx =
+            cx - p.x;
+
+        const dy =
+            cy - p.y;
+
+
+        p.vx +=
+            dx * 0.000002;
+
+        p.vy +=
+            dy * 0.000002;
+
+
+        if (
+            p.x > 0 &&
+            p.x < window.innerWidth &&
+            p.y > 0 &&
+            p.y < window.innerHeight
+        ) {
+
+            p.outside = false;
+        }
+    }
+
+
+    p.vx +=
+        Math.sin(
+            time * 0.0003 +
+            p.seed
+        )
+        * 0.0007;
+
+
+    p.vy +=
+        Math.cos(
+            time * 0.00025 +
+            p.seed
+        )
+        * 0.0007;
+
+
+    const speed =
+        Math.sqrt(
+            p.vx * p.vx +
+            p.vy * p.vy
+        );
+
+
+    const maxSpeed =
+        0.5;
+
+
+    if (
+        speed > maxSpeed
+    ) {
+
+        p.vx =
+            p.vx /
+            speed *
+            maxSpeed;
+
+        p.vy =
+            p.vy /
+            speed *
+            maxSpeed;
+    }
+
+
+    p.x +=
+        p.vx;
+
+    p.y +=
+        p.vy;
+
+
+    const margin = 5;
+
+
+    if (
+        p.x < margin
+    ) {
+
+        p.x = margin;
+
+        p.vx =
+            Math.abs(
+                p.vx
+            );
+    }
+
+
+    if (
+        p.x >
+        window.innerWidth -
+        margin
+    ) {
+
+        p.x =
+            window.innerWidth -
+            margin;
+
+        p.vx =
+            -Math.abs(
+                p.vx
+            );
+    }
+
+
+    if (
+        p.y < margin
+    ) {
+
+        p.y = margin;
+
+        p.vy =
+            Math.abs(
+                p.vy
+            );
+    }
+
+
+    if (
+        p.y >
+        window.innerHeight -
+        margin
+    ) {
+
+        p.y =
+            window.innerHeight -
+            margin;
+
+        p.vy =
+            -Math.abs(
+                p.vy
+            );
+    }
+}
+
+
+/* =====================================================
+   防止文字重叠
+===================================================== */
+
+function avoidOverlap() {
+
+    const active =
+        particles.filter(
+            p => p.active
+        );
+
+
+    const minDistance =
+        FONT_SIZE * 1.05;
+
+
+    for (
+        let i = 0;
+        i < active.length;
+        i++
+    ) {
+
+        for (
+            let j = i + 1;
+            j < active.length;
+            j++
+        ) {
+
+            const a =
+                active[i];
+
+            const b =
+                active[j];
+
+
+            const dx =
+                b.x - a.x;
+
+            const dy =
+                b.y - a.y;
+
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+
+            if (
+                distance > 0 &&
+                distance < minDistance
+            ) {
+
+                const push =
+                    (
+                        minDistance -
+                        distance
+                    )
+                    * 0.02;
+
+
+                const nx =
+                    dx /
+                    distance;
+
+                const ny =
+                    dy /
+                    distance;
+
+
+                a.x -=
+                    nx * push;
+
+                a.y -=
+                    ny * push;
+
+
+                b.x +=
+                    nx * push;
+
+                b.y +=
+                    ny * push;
+            }
+        }
+    }
+}
+
+
+/* =====================================================
+   向图案移动
+===================================================== */
+
+function moveToTarget(p) {
+
+    const dx =
+        p.tx - p.x;
+
+    const dy =
+        p.ty - p.y;
+
+
+    p.x +=
+        dx * 0.025;
+
+    p.y +=
+        dy * 0.025;
+}
+
+
+/* =====================================================
+   溃散
+===================================================== */
+
+function dissolve() {
+
+    const active =
+        particles.filter(
+            p => p.active
+        );
+
+
+    active.forEach(
+        p => {
+
+            const angle =
+                Math.random()
+                * Math.PI * 2;
+
+
+            const speed =
+                0.2 +
+                Math.random()
+                * 0.4;
+
+
+            p.vx =
+                Math.cos(angle)
+                * speed;
+
+            p.vy =
+                Math.sin(angle)
+                * speed;
+
+
+            p.tx =
+                p.x +
+                (
+                    Math.random()
+                    - 0.5
+                )
+                * 300;
+
+
+            p.ty =
+                p.y +
+                (
+                    Math.random()
+                    - 0.5
+                )
+                * 300;
+        }
+    );
+
+
+    showStatus(
+        "文字がまた迷子になります……"
+    );
+}
+
+
+/* =====================================================
+   删除飞出画面的文字
+===================================================== */
+
+function cleanup() {
+
+    for (
+        let i =
+            particles.length - 1;
+        i >= 0;
+        i--
+    ) {
+
+        const p =
+            particles[i];
+
+
+        if (
+            !p.active &&
+            (
+                p.x < -200 ||
+                p.x >
+                window.innerWidth + 200 ||
+                p.y < -200 ||
+                p.y >
+                window.innerHeight + 200
+            )
+        ) {
+
+            p.el.remove();
+
+            particles.splice(
+                i,
+                1
+            );
+        }
+    }
+}
+
+
+/* =====================================================
+   显示状态
+===================================================== */
+
+function showStatus(text) {
+
+    statusText.textContent =
+        text;
+
+    statusText.style.opacity =
+        "0.6";
+
+
+    setTimeout(
+        () => {
+
+            statusText.style.opacity =
+                "0";
+
+        },
+        1500
+    );
+}
+
+
+/* =====================================================
+   显示文字
+===================================================== */
+
+function render(p) {
+
+    p.el.style.transform =
+        `translate3d(
+            ${p.x}px,
+            ${p.y}px,
+            0
+        )`;
+
+
+    p.el.style.opacity =
+        p.opacity;
+}
+
+
+/* =====================================================
+   主循环
+===================================================== */
+
+function loop(time) {
+
+    if (!started)
+        return;
+
+
+    if (!lastTime)
+        lastTime = time;
+
+
+    const delta =
+        Math.min(
+            time - lastTime,
+            30
+        );
+
+
+    lastTime =
+        time;
+
+
+    const elapsed =
+        time - phaseStart;
+
+
+    /* =========================
+       ① 迷路
+    ========================= */
+
+    if (
+        phase === "wander"
+    ) {
+
+        particles.forEach(
+            p => {
+
+                if (p.active) {
+
+                    wander(
+                        p,
+                        time
+                    );
+
+                } else {
+
+                    p.x +=
+                        p.vx *
+                        delta;
+
+                    p.y +=
+                        p.vy *
+                        delta;
+
+                    p.opacity -=
+                        0.005 *
+                        delta;
+                }
+
+
+                render(p);
+            }
+        );
+
+
+        avoidOverlap();
+
+
+        if (
+            elapsed >=
+            WANDER_TIME
+        ) {
+
+            phase =
+                "forming";
+
+            phaseStart =
+                time;
+
+
+            setShape();
+        }
+    }
+
+
+    /* =========================
+       ② 形成轮廓
+    ========================= */
+
+    else if (
+        phase === "forming"
+    ) {
+
+        particles.forEach(
+            p => {
+
+                if (p.active) {
+
+                    moveToTarget(
+                        p
+                    );
+
+                } else {
+
+                    p.x +=
+                        p.vx *
+                        delta;
+
+                    p.y +=
+                        p.vy *
+                        delta;
+
+                    p.opacity -=
+                        0.006 *
+                        delta;
+                }
+
+
+                render(p);
+            }
+        );
+
+
+        cleanup();
+
+
+        if (
+            elapsed >=
+            FORM_TIME
+        ) {
+
+            dissolve();
+
+            phase =
+                "dissolving";
+
+            phaseStart =
+                time;
+        }
+    }
+
+
+    /* =========================
+       ③ 溃散
+    ========================= */
+
+    else if (
+        phase === "dissolving"
+    ) {
+
+        particles.forEach(
+            p => {
+
+                if (p.active) {
+
+                    const dx =
+                        p.tx - p.x;
+
+                    const dy =
+                        p.ty - p.y;
+
+
+                    p.x +=
+                        dx * 0.003 +
+                        p.vx;
+
+
+                    p.y +=
+                        dy * 0.003 +
+                        p.vy;
+
+
+                    p.vx +=
+                        (
+                            Math.random()
+                            - 0.5
+                        )
+                        * 0.005;
+
+
+                    p.vy +=
+                        (
+                            Math.random()
+                            - 0.5
+                        )
+                        * 0.005;
+
+                } else {
+
+                    p.x +=
+                        p.vx *
+                        delta;
+
+                    p.y +=
+                        p.vy *
+                        delta;
+                }
+
+
+                render(p);
+            }
+        );
+
+
+        avoidOverlap();
+
+        cleanup();
+
+
+        if (
+            elapsed >=
+            DISSOLVE_TIME
+        ) {
+
+            shapeIndex =
+                (
+                    shapeIndex + 1
+                )
+                %
+                shapes.length;
+
+
+            phase =
+                "wander";
+
+            phaseStart =
+                time;
+
+
+            showStatus(
+                "文字がまた迷子になっています……"
+            );
+        }
+    }
+
+
+    requestAnimationFrame(
+        loop
+    );
+}
+
+
+/* =====================================================
+   按钮
+===================================================== */
+
+startButton.addEventListener(
+    "click",
+    start
+);
+
+
+/* =====================================================
+   Enter 开始
+===================================================== */
+
+input.addEventListener(
+    "keydown",
+    e => {
+
+        if (
+            e.key === "Enter" &&
+            !e.shiftKey
+        ) {
+
+            e.preventDefault();
+
+            start();
+        }
+    }
+);
+
+</script>
+
+</body>
+</html>
