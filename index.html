@@ -45,6 +45,8 @@ body {
 ===================================================== */
 
 #inputArea {
+    opacity: 1;
+    transition: opacity 1s ease;
 
     position: fixed;
 
@@ -94,7 +96,7 @@ body {
     background:
         transparent;
 
-    font-size: 12px;
+    font-size: 18px;
 
     line-height: 1.6;
 
@@ -124,6 +126,35 @@ body {
 
 }
 
+#shrinkTextLayer {
+    position: absolute;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow: hidden;
+    text-align: center;
+    color: #111;
+    font-family: Arial, "Noto Sans JP", sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    transform-origin: center center;
+    z-index: 2;
+}
+
+
+#textInput.ui-fade-out,
+#charCount.ui-fade-out,
+#startButton.ui-fade-out {
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+
+#textInput.ui-text-hidden {
+    color: transparent !important;
+    caret-color: transparent !important;
+}
 
 #textInput:focus {
 
@@ -190,6 +221,37 @@ body {
 
 
 /* =====================================================
+   再介绍按钮
+===================================================== */
+
+#restartButton {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 120;
+    padding: 9px 24px;
+    border: 1px solid #222;
+    background: rgba(255,255,255,.92);
+    color: #222;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .6s ease;
+}
+
+#restartButton.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#restartButton:hover {
+    background: #111;
+    color: #fff;
+}
+
+/* =====================================================
    マイゴ字幕区域
 ===================================================== */
 
@@ -215,17 +277,21 @@ body {
 .subtitle {
 
     position: absolute;
-
     left: 0;
     top: 0;
+
+    max-width: 28vw;
+    box-sizing: border-box;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
 
     font-size: 14px;
 
     font-weight: normal;
 
     color: #222;
-
-    white-space: nowrap;
 
     opacity: 0;
 
@@ -345,6 +411,8 @@ body {
         rows="1"
     ></textarea>
 
+    <div id="shrinkTextLayer"></div>
+
     <div id="charCount">
         0 / 100
     </div>
@@ -354,6 +422,8 @@ body {
     </button>
 
 </div>
+
+<button id="restartButton">もう一度紹介したい</button>
 
 
 <!-- =====================================================
@@ -413,6 +483,16 @@ const charCount =
         "charCount"
     );
 
+const restartButton =
+    document.getElementById(
+        "restartButton"
+    );
+
+const shrinkTextLayer =
+    document.getElementById(
+        "shrinkTextLayer"
+    );
+
 
 let particles = [];
 
@@ -437,25 +517,26 @@ const shapes = [];
 let regionalMode = true;
 let regionalShapeList = [];
 let regionalShapeIndex = 0;
+let completedShapeCount = 0;
+let resetRequested = false;
 
 /* =====================================================
    47都道府県 × 3地域物件
 ===================================================== */
 const regionalShapesByPrefecture = {
-    "北海道":["北海道_札幌時計台","北海道_海鮮丼","北海道_タンチョウ"],
+    "北海道":["北海道_札幌時計台","北海道_カニ","北海道_牛乳"],
     "青森県":["青森県_アスパム","青森県_りんご","青森県_ねぶた"],
     "岩手県":["岩手県_岩手銀行赤レンガ館","岩手県_わんこそば","岩手県_南部鉄器"],
     "宮城県":["宮城県_伊達政宗公像","宮城県_牛タン","宮城県_伊達政宗の兜"],
-    "秋田県":["秋田県_大館樹海ドーム","秋田県_きりたんぽ","秋田県_秋田犬"],
-    "山形県":["山形県_山形市郷土館","山形県_芋煮","山形県_さくらんぼ"],
-    "福島県":["福島県_桃","福島県_アクアマリンふくしま","福島県_赤べこ"],
+    "秋田県":["秋田県_横手城","秋田県_きりたんぽ","秋田県_秋田犬"],
+    "山形県":["山形県_山寺","山形県_芋煮","山形県_さくらんぼ"],
+    "福島県":["福島県_鶴ヶ城","福島県_喜多方ラーメン","福島県_赤べこ"],
     "茨城県":["茨城県_牛久大仏","茨城県_納豆","茨城県_梅"],
     "栃木県":["栃木県_日光東照宮","栃木県_宇都宮餃子","栃木県_いちご"],
-    "群馬県":["群馬県_温泉","群馬県_こんにゃく","群馬県_だるま"],
+    "群馬県":["群馬県_富岡製糸場","群馬県_水沢うどん","群馬県_だるま"],
     "埼玉県":["埼玉県_川越時の鐘","埼玉県_草加せんべい","埼玉県_深谷ねぎ"],
-    "千葉県":["千葉県_日本なし","千葉県_落花生","千葉県_菜の花"],
+    "千葉県":["千葉県_成田山新勝寺","千葉県_落花生","千葉県_菜の花"],
     "東京都":["東京都_東京タワー","東京都_江戸前寿司","東京都_山手線"],
-    "神奈川県":["神奈川県_横浜赤レンガ倉庫","神奈川県_横浜シュウマイ","神奈川県_カモメ"],
     "神奈川県":["神奈川県_横浜赤レンガ倉庫","神奈川県_横浜シュウマイ","神奈川県_カモメ"],
     "新潟県":["新潟県_萬代橋","新潟県_笹団子","新潟県_米"],
     "富山県":["富山県_五箇山合掌造り","富山県_ます寿司","富山県_白えび"],
@@ -492,18 +573,9 @@ const regionalShapesByPrefecture = {
     "沖縄県":["沖縄県_首里城","沖縄県_沖縄そば","沖縄県_シーサー"]
 };
 
-const prefectureKeywords = {
-    "東京都": ["東京都", "東京"],
-    "大阪府": ["大阪府", "大阪"],
-    "京都府": ["京都府", "京都"]
-};
-
 function detectPrefecture(text) {
     for (const prefecture of Object.keys(regionalShapesByPrefecture)) {
-        const keywords = prefectureKeywords[prefecture] || [prefecture];
-        if (keywords.some(keyword => text.includes(keyword))) {
-            return prefecture;
-        }
+        if (text.includes(prefecture)) return prefecture;
     }
     return null;
 }
@@ -512,25 +584,30 @@ function detectPrefecture(text) {
    图形大小
 ===================================================== */
 
-const SHAPE_SIZE_RATIO = 0.55;
+const SHAPE_SIZE_RATIO = 0.8;
 
 
 /* =====================================================
    时间
 ===================================================== */
 
+const SHRINK_TIME = 2000;
+
 const WANDER_TIME = 5000;
 
-const FORM_TIME = 3000;
+const FORM_TIME = 2000;
 
-const DISSOLVE_TIME = 5000;
+const HOLD_TIME = 5000;
+
+const DISSOLVE_TIME = 3000;
+const RESET_TIME = 1000;
 
 
 /* =====================================================
    文字大小
 ===================================================== */
 
-const FONT_SIZE = 12;
+const FONT_SIZE = 10;
 
 
 /* =====================================================
@@ -674,35 +751,20 @@ function createSubtitle() {
 
 
     /*
-        在整个画面随机位置出现。
-
-        中央输入区域附近减少出现。
+        字幕只在画面左右两侧出现。
+        中央区域固定留给输入框和按钮，避免遮挡。
     */
 
     let x;
     let y;
 
+    if (Math.random() < 0.5) {
+        x = 8 + Math.random() * 20;
+    } else {
+        x = 72 + Math.random() * 20;
+    }
 
-    do {
-
-        x =
-            8 +
-            Math.random() * 84;
-
-
-        y =
-            8 +
-            Math.random() * 84;
-
-
-    } while (
-
-        x > 25 &&
-        x < 75 &&
-        y > 35 &&
-        y < 65
-
-    );
+    y = 12 + Math.random() * 76;
 
 
     el.style.left =
@@ -1120,8 +1182,11 @@ function start() {
 
     if (started) return;
 
-    const inputText = textInput.value.trim();
-    const prefecture = detectPrefecture(inputText);
+    const inputText =
+        input.value.trim();
+
+    const prefecture =
+        detectPrefecture(inputText);
 
     if (!prefecture) {
         showStatus("出身地を教えてください。");
@@ -1129,97 +1194,134 @@ function start() {
     }
 
     regionalMode = true;
-    regionalShapeList = regionalShapesByPrefecture[prefecture];
+    regionalShapeList =
+        regionalShapesByPrefecture[prefecture];
+
     regionalShapeIndex = 0;
-
+    completedShapeCount = 0;
+    resetRequested = false;
+    restartButton.classList.remove("show");
     started = true;
-
-
-    /*
-        停止マイゴ字幕
-    */
 
     stopSubtitles();
 
-
     /*
-        输入区域消失
+        输入文字动画：
+        保持 textarea 中原来的换行和位置，
+        用同一个字体排版复制层整体缩小。
     */
 
-    inputArea.style.display =
-        "none";
+    const inputRect =
+        input.getBoundingClientRect();
 
+    const inputStyle =
+        getComputedStyle(input);
 
-    const chars =
-        getInputCharacters();
+    shrinkTextLayer.style.left =
+        (inputRect.left - inputArea.getBoundingClientRect().left) + "px";
 
+    shrinkTextLayer.style.top =
+        (inputRect.top - inputArea.getBoundingClientRect().top) + "px";
 
-    const cx =
-        window.innerWidth / 2;
+    shrinkTextLayer.style.width =
+        inputRect.width + "px";
 
+    shrinkTextLayer.style.height =
+        inputRect.height + "px";
 
-    const cy =
-        window.innerHeight / 2;
+    shrinkTextLayer.style.padding =
+        inputStyle.padding;
 
+    shrinkTextLayer.style.boxSizing =
+        inputStyle.boxSizing;
+
+    shrinkTextLayer.style.fontFamily =
+        inputStyle.fontFamily;
+
+    shrinkTextLayer.style.fontSize =
+        inputStyle.fontSize;
+
+    shrinkTextLayer.style.fontWeight =
+        inputStyle.fontWeight;
+
+    shrinkTextLayer.style.lineHeight =
+        inputStyle.lineHeight;
+
+    shrinkTextLayer.style.letterSpacing =
+        inputStyle.letterSpacing;
+
+    shrinkTextLayer.style.textAlign =
+        inputStyle.textAlign;
+
+    shrinkTextLayer.style.border =
+        "0";
+
+    shrinkTextLayer.style.display =
+        "block";
+
+    shrinkTextLayer.textContent =
+        inputText;
 
     /*
-        输入文字从中央附近开始
+        先让复制层完成排版，再记录每个字符的真实位置。
+        因为复制层与输入框使用完全相同的文字排版参数，
+        所以不会重新排列成另一种布局。
     */
+    const textNode =
+        shrinkTextLayer.firstChild;
 
-    chars.forEach(
-        (
-            char,
-            index
-        ) => {
+    const charRects = [];
 
+    if (textNode) {
 
-            const angle =
-                Math.PI * 2
-                * index
-                / chars.length;
+        for (let i = 0; i < textNode.length; i++) {
 
+            const range =
+                document.createRange();
 
-            const radius =
-                Math.min(
-                    chars.length * 5,
-                    100
-                );
+            range.setStart(textNode, i);
+            range.setEnd(textNode, i + 1);
 
+            const rect =
+                range.getBoundingClientRect();
 
-            const x =
-                cx +
-                Math.cos(angle)
-                * radius;
-
-
-            const y =
-                cy +
-                Math.sin(angle)
-                * radius;
-
-
-            createParticle(
-                char,
-                x,
-                y
-            );
-
+            charRects.push({
+                char: textNode.textContent[i],
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            });
         }
-    );
+    }
 
+    /* 输入框和按钮从点击瞬间开始，在 1 秒内淡出 */
+    input.classList.add("ui-fade-out");
+    charCount.classList.add("ui-fade-out");
+    startButton.classList.add("ui-fade-out");
+    input.classList.add("ui-text-hidden");
+
+    shrinkTextLayer.style.transform =
+        "translateZ(0) scale(1)";
+
+    shrinkTextLayer.style.transformOrigin =
+        "center center";
+
+    window.__inputCharRects =
+        charRects;
+
+    window.__inputShrinkCenter = {
+        x: inputRect.left + inputRect.width / 2,
+        y: inputRect.top + inputRect.height / 2
+    };
 
     phase =
-        "wander";
-
+        "shrinking";
 
     phaseStart =
         performance.now();
 
-
     showStatus(
         "文字が迷子になっています……"
     );
-
 
     requestAnimationFrame(
         loop
@@ -1991,13 +2093,13 @@ function addLine(
 
 const REGIONAL_SHAPES = {
 
-    "北海道": ["札幌時計台", "海鮮丼", "タンチョウ"],
-    "青森県": ["弘前城", "りんご", "ねぶた"],
-    "岩手県": ["中尊寺金色堂", "わんこそば", "南部鉄器"],
-    "宮城県": ["瑞鳳殿", "牛タン", "伊達政宗の兜"],
-    "秋田県": ["大館樹海ドーム", "きりたんぽ", "秋田犬"],
-    "山形県": ["山形市郷土館", "芋煮", "さくらんぼ"],
-    "福島県": ["桃", "アクアマリンふくしま", "赤べこ"]
+    "北海道": ["札幌時計台", "カニ", "牛乳"],
+    "青森県": ["アスパム", "りんご", "ねぶた"],
+    "岩手県": ["岩手銀行赤レンガ館", "わんこそば", "南部鉄器"],
+    "宮城県": ["伊達政宗公像", "牛タン", "伊達政宗の兜"],
+    "秋田県": ["横手城", "きりたんぽ", "秋田犬"],
+    "山形県": ["山寺（立石寺）", "芋煮", "さくらんぼ"],
+    "福島県": ["鶴ヶ城", "喜多方ラーメン", "赤べこ"]
 
 };
 
@@ -2069,24 +2171,65 @@ function generateRegionalShape(key) {
     const ellipse = (x,y,rx,ry,n=70) => regionalEllipse(points,x,y,rx,ry,n);
     const poly = (v,n=24) => regionalPolygon(points,v,n);
 
-    switch (key) {
 
-        case "北海道_札幌時計台": {
-            const w=s*1.05,h=s*1.35;
-            line(cx-w*.62,cy+h*.58,cx+w*.62,cy+h*.58,36);
-            line(cx-w*.55,cy+h*.58,cx-w*.55,cy-h*.05,28);
-            line(cx+w*.55,cy+h*.58,cx+w*.55,cy-h*.05,28);
-            poly([{x:cx-w*.62,y:cy-h*.05},{x:cx,y:cy-h*.45},{x:cx+w*.62,y:cy-h*.05}],30);
-            line(cx-w*.17,cy-h*.40,cx-w*.17,cy-h*.90,24);
-            line(cx+w*.17,cy-h*.40,cx+w*.17,cy-h*.90,24);
-            poly([{x:cx-w*.22,y:cy-h*.90},{x:cx,y:cy-h*1.10},{x:cx+w*.22,y:cy-h*.90}],22);
-            ellipse(cx,cy-h*.55,w*.18,h*.13,60);
-            line(cx,cy-h*.55,cx,cy-h*.64,12);
-            line(cx,cy-h*.55,cx+w*.07,cy-h*.52,12);
-            ellipse(cx-w*.30,cy+h*.18,w*.07,h*.10,24);
-            ellipse(cx+w*.30,cy+h*.18,w*.07,h*.10,24);
-            break;
-        }
+const EMBEDDED_SVGS = {
+    '青森県_りんご': "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg id=\"_图层_2\" data-name=\"图层 2\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 116.9 119.83\">\n  <defs>\n    <style>\n      .cls-1 {\n        fill: none;\n        stroke: #040000;\n        stroke-linecap: round;\n        stroke-linejoin: round;\n        stroke-width: 3.15px;\n      }\n    </style>\n  </defs>\n  <g id=\"_图层_1-2\" data-name=\"图层 1\">\n    <g>\n      <path class=\"cls-1\" d=\"M58.45,30.74l-.17-.17c-5.49-5.59-13-8.74-20.84-8.74h0C17.63,21.83,1.57,37.89,1.57,57.7v4.7c0,17.74,7.05,34.75,19.59,47.29h0c9.98,9.98,25.68,11.4,37.29,3.35h0\"/>\n      <path class=\"cls-1\" d=\"M58.45,30.74l.17-.17c5.49-5.59,13-8.74,20.84-8.74h0c19.81,0,35.87,16.06,35.87,35.87v4.7c0,17.74-7.05,34.75-19.59,47.29h0c-9.98,9.98-25.68,11.4-37.29,3.35h0\"/>\n      <path class=\"cls-1\" d=\"M58.45,30.74v-5.89c0-9.52-4.98-18.35-13.13-23.28h0\"/>\n    </g>\n  </g>\n</svg>",
+    '北海道_牛乳': "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg id=\"_图层_2\" data-name=\"图层 2\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 115.1 112.91\">\n  <defs>\n    <style>\n      .cls-1 {\n        stroke-width: 3px;\n      }\n\n      .cls-1, .cls-2 {\n        fill: none;\n        stroke: #040000;\n        stroke-linecap: round;\n        stroke-linejoin: round;\n      }\n\n      .cls-2 {\n        stroke-width: 3.56px;\n      }\n    </style>\n  </defs>\n  <g id=\"_图层_1-2\" data-name=\"图层 1\">\n    <g>\n      <path class=\"cls-1\" d=\"M38.68,12.39l12.48,21.08c1.75,2.96,2.68,6.33,2.68,9.77v58.92c0,4.95-4.02,8.97-8.97,8.97,0,0-17.2,0-17.2,0H10.47c-4.95,0-8.97-4.02-8.97-8.97v-58.92c0-3.44.92-6.81,2.68-9.77l12.48-21.08h22.02Z\"/>\n      <line class=\"cls-1\" x1=\"1.5\" y1=\"45.32\" x2=\"53.84\" y2=\"45.32\"/>\n      <line class=\"cls-1\" x1=\"53.84\" y1=\"82.06\" x2=\"1.5\" y2=\"82.06\"/>\n      <polygon class=\"cls-2\" points=\"113.32 50.56 110.49 111.13 75.93 111.13 73.1 50.56 113.32 50.56\"/>\n      <line class=\"cls-2\" x1=\"73.97\" y1=\"69.12\" x2=\"112.5\" y2=\"69.12\"/>\n      <line class=\"cls-1\" x1=\"9.29\" y1=\"12.39\" x2=\"16.66\" y2=\"12.39\"/>\n      <line class=\"cls-1\" x1=\"28.31\" y1=\"12.39\" x2=\"35.68\" y2=\"12.39\"/>\n      <line class=\"cls-1\" x1=\"46.05\" y1=\"12.39\" x2=\"38.68\" y2=\"12.39\"/>\n      <polyline class=\"cls-1\" points=\"46.69 12.39 46.69 1.5 27.67 1.5 8.65 1.5 8.65 12.39\"/>\n    </g>\n  </g>\n</svg>",
+    '岩手県_岩手銀行赤レンガ館': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128.39 114.12">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <polygon class="cls-1" points="1.63 107.86 1.63 62.91 8.44 54.18 14.88 62.91 14.88 70.44 14.88 107.86 1.63 107.86"/>\n      <line class="cls-1" x1="8.44" y1="54.18" x2="8.44" y2="45.06"/>\n      <line class="cls-1" x1="1.63" y1="62.91" x2="14.88" y2="62.91"/>\n      <line class="cls-1" x1="14.88" y1="70.44" x2="40.27" y2="59.64"/>\n      <polygon class="cls-1" points="40.27 40.2 40.27 110.6 51.67 112.49 67.63 112.49 79.34 110.11 79.34 40.2 67.04 33.66 52.07 33.66 40.27 40.2"/>\n      <line class="cls-1" x1="14.88" y1="107.86" x2="40.27" y2="108.22"/>\n      <path class="cls-1" d="M55.24,112.49v-17.4c0-2.71,2.2-4.91,4.91-4.91h0c2.71,0,4.91,2.2,4.91,4.91v17.4"/>\n      <path class="cls-1" d="M44.68,37.75h0c0-7.85,6.36-14.21,14.21-14.21h1.47c7.85,0,14.21,6.36,14.21,14.21h0"/>\n      <line class="cls-1" x1="59.63" y1="23.54" x2="59.63" y2="1.63"/>\n      <line class="cls-1" x1="117.51" y1="108.92" x2="78.74" y2="108.92"/>\n      <polyline class="cls-1" points="79.34 58.45 95 64.49 121.87 59.64 126.76 71.72 126.76 106.74 117.51 108.92 117.51 69.16 121.87 59.64"/>\n      <polyline class="cls-1" points="95 64.49 100.26 71.77 100.26 108.92"/>\n      <line class="cls-1" x1="14.88" y1="74.67" x2="40.27" y2="66.08"/>\n      <polyline class="cls-1" points="79.34 66.08 100.26 71.77 117.51 69.16"/>\n    </g>\n  </g>\n</svg>',
+    '宮城県_伊達政宗の兜': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116.68 115.68">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <g>\n        <path class="cls-1" d="M99.95,72.92l8.68-3.05-5.18-11.42-6.7,2.74h0c-1.83-5.1-4.62-9.68-8.11-13.56-5.02,10.47-14.52,18.47-30.3,18.59-17.35.13-27.97-6.08-34.43-13.14-1.6,2.52-2.95,5.24-3.98,8.12l-6.7-2.74-5.18,11.42,8.68,3.05L1.5,114.18h16.9l8.98-39.29s4.04,10.66,30.95,10.66,30.95-10.66,30.95-10.66l8.98,39.29h16.9l-15.23-41.27Z"/>\n        <path class="cls-1" d="M58.34,48.55c7.78-1.83,13.43-5.7,17.54-10.48-4.25-2.04-8.88-3.37-13.73-3.84h0c-2.54-.25-5.09-.25-7.62,0h0c-9.75.96-18.62,5.34-25.24,12.07,7.01,3.3,16.59,5.18,29.05,2.25Z"/>\n        <path class="cls-1" d="M86.62,1.5s1.54,22.31-10.74,36.58c-4.11,4.77-9.76,8.64-17.54,10.48-12.46,2.94-22.05,1.05-29.05-2.25-10.43-4.92-15.15-12.98-15.15-12.98,0,0,1.39,10.58,9.77,19.74,6.46,7.06,17.08,13.28,34.43,13.14,15.77-.12,25.28-8.11,30.3-18.59,7.67-15.99,4.88-37.75-2.02-46.13Z"/>\n      </g>\n      <polyline class="cls-1" points="97.14 109.21 58.34 109.21 19.54 109.21"/>\n    </g>\n  </g>\n</svg>',
+    '宮城県_伊達政宗公像': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 125.82 152.04">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <path class="cls-1" d="M37.92,18.28S62.68,28.78,86.16,1.65c0,0,1.1,13.61-20.47,22.48,0,0,19.37,17.27,9.41,25.13l6.85,9.78-2.19,1.46s3.38,9.41-1.55,12.15-7.95,4.93-7.95,4.93l-.37,6.21s29.51-2.65,34.99,8.68c0,0,6.94-2.38,10.32,7.58s8.95,7.4,8.95,7.4c0,0-2.56,8.31-16.72,3.29l10.32,14.89,1.37,19.1-1.55,5.03-6.85.64,2.65-5.94-4.75-16.26-16.26-10.42,2.92,13.52-6.85,19.1h-7.95l6.67-19.28-6.76-13.89-16.45-.82,3.2,26.86-4.75,7.13h-9.41l5.66-7.58-8.5-21.93-12.24-6.94-6.85,4.48,2.47,7.49,6.3.82,2.74,11.7-10.87-4.93-13.07-18.91,12.97-12.52-8.86-23.21-13.34,9-7.77-3.15,3.93-14.44,4.29-16.81-1.55-6.21,6.4,3.02,1.37-.55-1.01-7.13,8.77,4.75,22.02,25.95s-1.46-16.08,6.49-20.37c0,0-16.69-2.74-4.39-18.36,0,0-1.46-4.93,4.93-9.41,0,0-8.68.09-14.98-6.85Z"/>\n  </g>\n</svg>',
+    '北海道_札幌時計台': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 91.29 116.81">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <polyline class="cls-1" points="36.78 56.13 9.29 56.13 1.5 69.07 1.5 115.31 18.84 115.31 18.84 74.07"/>\n      <line class="cls-1" x1="1.5" y1="69.07" x2="23.84" y2="69.07"/>\n      <polyline class="cls-1" points="61.52 56.13 57.12 47.5 57.12 21.6 45.65 10.13 34.18 21.6 34.18 47.5 29.77 56.13"/>\n      <polyline class="cls-1" points="54.51 56.13 82 56.13 89.79 69.07 89.79 115.31 72.45 115.31 72.45 74.07"/>\n      <line class="cls-1" x1="89.79" y1="69.07" x2="67.45" y2="69.07"/>\n      <polyline class="cls-1" points="72.45 115.31 45.71 115.31 45.59 115.31 18.84 115.31"/>\n      <polyline class="cls-1" points="54.93 115.31 54.93 96.26 45.92 87.25 45.38 87.25 36.36 96.26 36.36 115.31"/>\n      <polygon class="cls-1" points="72.45 74.07 45.65 74.07 18.84 74.07 45.65 47.5 72.45 74.07"/>\n      <line class="cls-1" x1="45.65" y1="10.13" x2="45.65" y2="1.5"/>\n      <line class="cls-1" x1="34.18" y1="47.5" x2="57.12" y2="47.5"/>\n    </g>\n  </g>\n</svg>',
+    '青森県_アスパム': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 149.78 97.92">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <line class="cls-1" x1="34.14" y1="54.21" x2="65.78" y2="54.21"/>\n      <line class="cls-1" x1="27.8" y1="62.4" x2="65.78" y2="62.4"/>\n      <line class="cls-1" x1="20.95" y1="71.27" x2="65.78" y2="71.27"/>\n      <line class="cls-1" x1="14.23" y1="79.96" x2="65.78" y2="79.96"/>\n      <line class="cls-1" x1="7.06" y1="89.23" x2="65.78" y2="89.23"/>\n      <polyline class="cls-1" points="74.89 1.5 148.28 96.42 74.89 96.42 1.5 96.42 74.89 1.5"/>\n      <path class="cls-1" d="M74.89,45.42h18.23s0-16.05,0-16.05h0c-10.12-7.9-26.34-7.9-36.46,0h0v16.05s18.23,0,18.23,0Z"/>\n      <path class="cls-1" d="M93.12,45.42h0c-10.12-7.9-26.34-7.9-36.46,0h0"/>\n      <line class="cls-1" x1="115.64" y1="54.21" x2="84.01" y2="54.21"/>\n      <line class="cls-1" x1="121.98" y1="62.4" x2="84.01" y2="62.4"/>\n      <line class="cls-1" x1="128.84" y1="71.27" x2="84.01" y2="71.27"/>\n      <line class="cls-1" x1="135.55" y1="79.96" x2="84.01" y2="79.96"/>\n      <line class="cls-1" x1="142.73" y1="89.23" x2="84.01" y2="89.23"/>\n      <line class="cls-1" x1="74.89" y1="45.42" x2="74.89" y2="96.42"/>\n    </g>\n  </g>\n</svg>',
+    '北海道_カニ': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140.08 88.47">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <path class="cls-1" d="M137.96,11.31l-11.79,3.01,1.7-12.32s-28.17-6.12-30.79,24.15h0c-3.31-2.03-6.8-3.49-10.14-4.54l.95-4.19c3.67-.66,6.46-3.87,6.46-7.74,0-4.34-3.52-7.86-7.86-7.86s-7.86,3.52-7.86,7.86c0,2.2.9,4.19,2.36,5.61l-1.26,4.54c-5.63-1.01-9.69-.94-9.69-.94,0,0-4.06-.07-9.69.94l-1.26-4.54c1.45-1.43,2.36-3.41,2.36-5.61,0-4.34-3.52-7.86-7.86-7.86s-7.86,3.52-7.86,7.86c0,3.86,2.79,7.07,6.46,7.74l.95,4.19c-3.33,1.05-6.83,2.51-10.14,4.54h0C40.37-4.12,12.21,2.01,12.21,2.01l1.7,12.32-11.79-3.01c-5.5,34.73,27.61,29.94,27.61,29.94h0c-.69,1.62-1.27,3.35-1.72,5.21l-16.45,7.44c-1.95.88-2.83,3.21-1.94,5.16h0c.88,1.95,3.21,2.83,5.16,1.94l11.93-5.4c-.1,3.01.18,5.74.8,8.2l-6.7,6.19c-1.57,1.46-1.67,3.93-.22,5.51h0c1.46,1.57,3.93,1.67,5.51.22l4.82-4.45c1.16,1.64,2.54,3.09,4.11,4.38l-4,4.97c-1.35,1.67-1.08,4.14.59,5.48h0c1.67,1.35,4.14,1.08,5.48-.59l4.64-5.76c7.69,3.48,17.65,4.8,28.3,4.8s20.62-1.32,28.3-4.8l4.64,5.76c1.35,1.67,3.81,1.94,5.48.59h0c1.67-1.35,1.94-3.81.59-5.48l-4-4.97c1.57-1.29,2.95-2.75,4.11-4.38l4.82,4.45c1.57,1.46,4.05,1.36,5.51-.22h0c1.46-1.57,1.36-4.05-.22-5.51l-6.7-6.19c.62-2.46.9-5.19.8-8.2l11.93,5.4c1.95.88,4.28,0,5.16-1.94h0c.88-1.95,0-4.28-1.94-5.16l-16.45-7.44c-.46-1.86-1.04-3.6-1.72-5.22h0s33.12,4.78,27.61-29.94Z"/>\n  </g>\n</svg>',
+    '青森県_ねぶた': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 118.79 116.61">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <path class="cls-1" d="M7.61,21.36s35.16,20.17,37.94,21.22-.62,10.43-12.08,8.93S9.63,38.75,7.61,21.36Z"/>\n      <path class="cls-1" d="M42.15,21.36s6.5-.07,7.43,15.15c.93,15.22,1.24,22.18,1.24,22.18,0,0-18.27,11.13-5.89,17.39,12.39,6.26,33.25,3.56,39.44-1.08s4.34-13.91-9.71-17.31c0,0-8.05-31.54-3.72-38.96"/>\n      <path class="cls-1" d="M16.24,76.55l15.49,1.08s14.04,12.52,34.48,11.13,36.76-13.45,36.76-13.45l14.25-2.16"/>\n      <path class="cls-1" d="M102.96,75.31s4.75,37.56-8.47,38.18c-13.22.62-15.07-3.56-25.81-3.25s-14.87,4.79-24.78,4.79-12.18-37.41-12.18-37.41"/>\n      <path class="cls-1" d="M36.88,106.89s10.12-9.01,32.42-9.01,33.04,6.37,33.04,6.37"/>\n      <path class="cls-1" d="M1.57,10.54s17.49-4.17,25.47,7.57,5.73,18.57,22.45,17.17"/>\n      <path class="cls-1" d="M108.13,1.57s-17.76,1.7-17.76,14.53-9.4,17.96-20.29,16.87"/>\n      <path class="cls-1" d="M110.81,13.48s-14.04,19.49-30.15,23.04,2.06,15.3,11.77,12.05,15.9-6.65,18.38-35.09Z"/>\n    </g>\n  </g>\n</svg>',
+    '岩手県_わんこそば': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110.74 111.98">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <path class="cls-1" d="M35.12,27.67S4.43,31.3,2.3,43.15c-2.05,11.45,1.35,37.76,25.02,51.01,1.58.88,2.57,2.55,2.57,4.36v2.83c0,4.88,3.96,8.84,8.84,8.84h16.63"/>\n      <path class="cls-1" d="M72.53,27.23s33.78,4.07,35.91,15.92-1.35,37.76-25.02,51.01c-1.58.88-2.57,2.55-2.57,4.36v2.83c0,4.88-3.96,8.84-8.84,8.84h-16.63"/>\n      <path class="cls-1" d="M55.37,62.07h-9.92c-13.64,0-26.86-4.91-37.43-13.9h0"/>\n      <path class="cls-1" d="M55.37,62.07h9.92c13.64,0,26.86-4.91,37.43-13.9h0"/>\n      <path class="cls-1" d="M33.76,54.57s5.71-6.08,16.46,2.17"/>\n      <path class="cls-1" d="M25.93,52.41s13.2-15.12,34.72,2.73"/>\n      <path class="cls-1" d="M19.25,49.11s13.69-19.47,36.84-6.19c23.15,13.28,25.5,10.88,25.5,10.88"/>\n      <path class="cls-1" d="M88.2,50.79s-10.82-10.07-20.65-1.68"/>\n      <path class="cls-1" d="M94.56,49.11s-11.57-20.8-34.88-4.16"/>\n      <path class="cls-1" d="M46.76,39.09s-7.79-17.69-3.47-37.29"/>\n      <path class="cls-1" d="M58.47,44.28s-12.98-2.86-7.28-40.79"/>\n      <path class="cls-1" d="M66.41,40.98s-11.14-2.06-8.7-36.29"/>\n      <path class="cls-1" d="M71.86,39.09s-14.51-25.27-14.48-26.74"/>\n    </g>\n  </g>\n</svg>',
+    '岩手県_南部鉄器': '<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110.89 105.28">\n  \n  <g id="_图层_1-2" data-name="图层 1">\n    <g>\n      <path class="cls-1" d="M68.44,30.6h0c-21.48,0-39.13,16.94-40.01,38.4l-.73,17.91c-.11,2.65,1.72,5,4.31,5.54l6.74,1.41h0c3.8,6.04,10.44,9.71,17.58,9.71h12.12"/>\n      <path class="cls-1" d="M68.44,30.6h0c21.48,0,39.13,16.94,40.01,38.4l.73,17.91c.11,2.65-1.72,5-4.31,5.54l-6.74,1.41h0c-3.8,6.04-10.44,9.71-17.58,9.71h-12.12"/>\n      <path class="cls-1" d="M28.74,65.42s-5.67,3.47-8.59-4.3-6.38-13.79-18.45-12.31c0,0,10.27,13.97,8.88,19.94s4.79,16.21,17.31,13.45"/>\n      <path class="cls-1" d="M94.68,40.39l3.37-3.22c12.32-11.78,5.03-27.82-15.24-33.54h0c-9.15-2.58-19.58-2.58-28.73,0h0c-20.27,5.72-27.56,21.76-15.24,33.54l3.37,3.22"/>\n    </g>\n  </g>\n</svg>',
+    '宮城県_牛タン': '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg id=\"_图层_2\" data-name=\"图层 2\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 142.91 129.5\">\n  <defs>\n    <style>\n      .cls-1 {\n        fill: none;\n        stroke: #040000;\n        stroke-linecap: round;\n        stroke-linejoin: round;\n        stroke-width: 3px;\n      }\n    </style>\n  </defs>\n  <g id=\"_图层_1-2\" data-name=\"图层 1\">\n    <g>\n      <line class=\"cls-1\" x1=\"71.46\" y1=\"98.22\" x2=\"71.46\" y2=\"117.92\"/>\n      <path class=\"cls-1\" d=\"M108.54,80.67h0c-23.91-8.98-50.26-8.98-74.17,0h0s-5.96-19.47-5.96-19.47c-21.27.55-26.91-14.29-26.91-14.29l43.91-22.61.73-22.81,7.41,17.93h35.81s7.41-17.93,7.41-17.93l.73,22.81,43.91,22.61s-5.64,14.84-26.91,14.29l-5.96,19.47h0c.18,9.64-7.58,17.54-17.22,17.54h-2.66s0,12.58,0,12.58c0,9.5-7.7,17.2-17.2,17.2h0c-9.5,0-17.2-7.7-17.2-17.2v-12.58s-2.66,0-2.66,0c-9.51,0-17.22-7.71-17.22-17.22v-.32\"/>\n      <circle class=\"cls-1\" cx=\"47.03\" cy=\"57.33\" r=\"8.97\"/>\n      <circle class=\"cls-1\" cx=\"95.89\" cy=\"57.33\" r=\"8.97\"/>\n    </g>\n    <line class=\"cls-1\" x1=\"54.26\" y1=\"98.22\" x2=\"88.66\" y2=\"98.22\"/>\n  </g>\n</svg>',
+};
+
+
+
+function generateFromEmbeddedSVG(key) {
+    const svgText = EMBEDDED_SVGS[key];
+    if (!svgText) return null;
+
+    const holder = document.createElement("div");
+    holder.style.position = "absolute";
+    holder.style.width = "0";
+    holder.style.height = "0";
+    holder.style.overflow = "hidden";
+    holder.style.pointerEvents = "none";
+    holder.innerHTML = svgText;
+    document.body.appendChild(holder);
+    const source = holder.querySelector("svg");
+    const vb = (source.getAttribute("viewBox") || "0 0 100 100").trim().split(/\s+/).map(Number);
+    const minX = vb[0], minY = vb[1], vbW = vb[2], vbH = vb[3];
+    const maxSize =
+        Math.min(window.innerWidth, window.innerHeight)
+        * SHAPE_SIZE_RATIO
+        * 0.85;
+    const scale = Math.min(
+        maxSize / vbW,
+        maxSize / vbH
+    );
+    const ox = window.innerWidth / 2 - (minX + vbW / 2) * scale;
+    const oy = window.innerHeight / 2 - (minY + vbH / 2) * scale;
+    const raw = [];
+    const pushLine = (x1,y1,x2,y2,n=28) => { for(let i=0;i<n;i++){ const t=i/Math.max(1,n-1); raw.push({x:x1+(x2-x1)*t,y:y1+(y2-y1)*t}); } };
+    source.querySelectorAll("line").forEach(e=>pushLine(+e.getAttribute("x1"),+e.getAttribute("y1"),+e.getAttribute("x2"),+e.getAttribute("y2"),32));
+    source.querySelectorAll("polyline, polygon").forEach(e=>{ const pts=(e.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number); for(let i=0;i<pts.length-2;i+=2) pushLine(pts[i],pts[i+1],pts[i+2],pts[i+3],26); if(e.tagName.toLowerCase()==="polygon" && pts.length>=4) pushLine(pts[pts.length-2],pts[pts.length-1],pts[0],pts[1],26); });
+    source.querySelectorAll("path").forEach(path=>{ try { const len=path.getTotalLength(); const n=Math.max(30,Math.floor(len/3)); for(let i=0;i<n;i++){ const p=path.getPointAtLength(len*i/(n-1)); raw.push({x:p.x,y:p.y}); } } catch(e) {} });
+    const result = raw.map(p=>({x:p.x*scale+ox,y:p.y*scale+oy}));
+    holder.remove();
+    return result;
+}
+
+
+    if (EMBEDDED_SVGS[key]) {
+        return generateFromEmbeddedSVG(key);
+    }
+
+    switch (key) {
 
         case "北海道_海鮮丼": {
             ellipse(cx,cy-s*.10,s*.78,s*.25,90);
@@ -2116,270 +2259,379 @@ function generateRegionalShape(key) {
             break;
         }
 
-        case "青森県_アスパム": {
-    const w=s*.82, h=s*1.08;
-
-    poly([
-        {x:cx,y:cy-h},
-        {x:cx-w,y:cy+h*.55},
-        {x:cx+w,y:cy+h*.55}
-    ],42);
-
-    line(cx-w*.46,cy+h*.55,cx-w*.18,cy-h*.05,24);
-    line(cx+w*.46,cy+h*.55,cx+w*.18,cy-h*.05,24);
-    line(cx-w*.18,cy-h*.05,cx+w*.18,cy-h*.05,20);
-    line(cx-w*.30,cy+h*.18,cx+w*.30,cy+h*.18,22);
-    line(cx-w*.38,cy+h*.40,cx+w*.38,cy+h*.40,22);
-    line(cx,cy-h*.98,cx,cy+h*.52,18);
-
-    for(let i=0;i<3;i++){
-        const yy=cy+h*(.02+i*.18);
-        line(
-            cx-w*(.48-i*.06),yy,
-            cx+w*(.48-i*.06),yy,
-            14
-        );
-    }
-
-    poly([
-        {x:cx-w*.16,y:cy+h*.55},
-        {x:cx-w*.09,y:cy+h*.28},
-        {x:cx+w*.09,y:cy+h*.28},
-        {x:cx+w*.16,y:cy+h*.55}
-    ],18);
-
-    break;
-}
-
-case "青森県_りんご": {
-    const count=110;
-
-    for(let i=0;i<count;i++){
-        const t=Math.PI*2*i/count;
-
-        let x=Math.cos(t)*s*.85;
-        let y=Math.sin(t)*s*.90;
-
-        if(y < -s*.45 && Math.abs(x) < s*.30){
-            y += s*.13*(1-Math.abs(x)/(s*.30));
+        case "青森県_弘前城": {
+            const w=s,h=s*1.25;
+            poly([{x:cx-w*.78,y:cy+h*.58},{x:cx-w*.60,y:cy+h*.30},{x:cx-w*.45,y:cy+h*.05},{x:cx+w*.45,y:cy+h*.05},{x:cx+w*.60,y:cy+h*.30},{x:cx+w*.78,y:cy+h*.58}],25);
+            line(cx-w*.42,cy+h*.05,cx-w*.42,cy-h*.42,25);
+            line(cx+w*.42,cy+h*.05,cx+w*.42,cy-h*.42,25);
+            line(cx-w*.52,cy-h*.42,cx+w*.52,cy-h*.42,25);
+            poly([{x:cx-w*.55,y:cy-h*.42},{x:cx,y:cy-h*.72},{x:cx+w*.55,y:cy-h*.42}],25);
+            line(cx-w*.65,cy-h*.42,cx,cy-h*.88,28);
+            line(cx,cy-h*.88,cx+w*.65,cy-h*.42,28);
+            ellipse(cx-w*.20,cy-h*.18,w*.08,h*.10,20);
+            ellipse(cx+w*.20,cy-h*.18,w*.08,h*.10,20);
+            break;
         }
 
-        points.push({x:cx+x,y:cy+y});
+        case "青森県_りんご": {
+        const count = 110;
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
+            const t =
+                Math.PI * 2
+                * i
+                / count;
+            let x =
+                Math.cos(t)
+                * scale
+                * 0.85;
+            let y =
+                Math.sin(t)
+                * scale
+                * 0.9;
+            if (
+                y < -scale * 0.45 &&
+                Math.abs(x)
+                < scale * 0.3
+            ) {
+                y +=
+                    scale
+                    * 0.13
+                    *
+                    (
+                        1 -
+                        Math.abs(x)
+                        /
+                        (scale * 0.3)
+                    );
+            }
+            points.push({
+                x:
+                    cx + x,
+                y:
+                    cy + y
+            });
+        }
+        for (
+            let i = 0;
+            i < 15;
+            i++
+        ) {
+            points.push({
+                x:
+                    cx +
+                    i * 2,
+                y:
+                    cy -
+                    scale * 0.92 -
+                    i * 3
+            });
+        }
     }
-
-    for(let i=0;i<15;i++){
-        points.push({
-            x:cx+i*2,
-            y:cy-s*.92-i*3
-        });
-    }
-
-    break;
-}
 
 case "青森県_ねぶた": {
 
-    /* ねぶた：顔部のみ、外輪郭なし */
+    const fw = s * .68;
+    const fh = s * .78;
 
-    line(cx-s*.58,cy-s*.40,cx-s*.10,cy-s*.27,28);
-    line(cx+s*.58,cy-s*.40,cx+s*.10,cy-s*.27,28);
+    /* ===== 上部の兜・飾り ===== */
 
-    poly([
-        {x:cx-s*.58,y:cy-s*.18},
-        {x:cx-s*.30,y:cy-s*.36},
-        {x:cx-s*.07,y:cy-s*.18},
-        {x:cx-s*.30,y:cy-s*.02}
-    ],25);
+    line(cx-s*.78, cy-s*.92, cx+s*.78, cy-s*.92, 34);
+    line(cx-s*.68, cy-s*.82, cx+s*.68, cy-s*.82, 26);
 
     poly([
-        {x:cx+s*.58,y:cy-s*.18},
-        {x:cx+s*.30,y:cy-s*.36},
-        {x:cx+s*.07,y:cy-s*.18},
-        {x:cx+s*.30,y:cy-s*.02}
-    ],25);
-
-    ellipse(cx-s*.30,cy-s*.18,s*.055,s*.095,22);
-    ellipse(cx+s*.30,cy-s*.18,s*.055,s*.095,22);
-
-    line(cx-s*.10,cy-s*.15,cx-s*.15,cy+s*.23,21);
-    line(cx+s*.10,cy-s*.15,cx+s*.15,cy+s*.23,21);
-    line(cx-s*.15,cy+s*.23,cx,cy+s*.30,20);
-    line(cx,cy+s*.30,cx+s*.15,cy+s*.23,20);
+        {x:cx-s*.42,y:cy-s*.82},
+        {x:cx-s*.28,y:cy-s*1.02},
+        {x:cx,y:cy-s*.88},
+        {x:cx+s*.28,y:cy-s*1.02},
+        {x:cx+s*.42,y:cy-s*.82}
+    ], 22);
 
     poly([
-        {x:cx-s*.53,y:cy+s*.36},
-        {x:cx-s*.23,y:cy+s*.29},
-        {x:cx,y:cy+s*.36},
-        {x:cx+s*.23,y:cy+s*.29},
-        {x:cx+s*.53,y:cy+s*.36},
-        {x:cx+s*.34,y:cy+s*.62},
-        {x:cx,y:cy+s*.69},
-        {x:cx-s*.34,y:cy+s*.62}
-    ],26);
+        {x:cx-s*.12,y:cy-s*.82},
+        {x:cx,y:cy-s*1.12},
+        {x:cx+s*.12,y:cy-s*.82}
+    ], 20);
 
-    line(cx-s*.38,cy+s*.43,cx+s*.38,cy+s*.43,23);
 
-    for(let i=-3;i<=3;i++){
-        line(
-            cx+i*s*.09,
-            cy+s*.43,
-            cx+i*s*.09,
-            cy+s*.54,
-            8
+    /* ===== 顔の外輪郭 ===== */
+
+    poly([
+        {x:cx-s*.48,y:cy-s*.72},
+        {x:cx-s*.68,y:cy-s*.52},
+        {x:cx-s*.74,y:cy-s*.15},
+        {x:cx-s*.70,y:cy+s*.22},
+        {x:cx-s*.58,y:cy+s*.50},
+        {x:cx-s*.34,y:cy+s*.70},
+        {x:cx,y:cy+s*.82},
+        {x:cx+s*.34,y:cy+s*.70},
+        {x:cx+s*.58,y:cy+s*.50},
+        {x:cx+s*.70,y:cy+s*.22},
+        {x:cx+s*.74,y:cy-s*.15},
+        {x:cx+s*.68,y:cy-s*.52},
+        {x:cx+s*.48,y:cy-s*.72}
+    ], 22);
+
+
+    /* ===== 左右の髪 ===== */
+
+    for(let side of [-1,1]){
+
+        ellipse(
+            cx + side*s*.70,
+            cy-s*.30,
+            s*.20,
+            s*.34,
+            34
+        );
+
+        ellipse(
+            cx + side*s*.78,
+            cy-s*.02,
+            s*.17,
+            s*.28,
+            30
+        );
+
+        ellipse(
+            cx + side*s*.72,
+            cy+s*.28,
+            s*.19,
+            s*.30,
+            30
+        );
+
+        ellipse(
+            cx + side*s*.62,
+            cy+s*.53,
+            s*.16,
+            s*.24,
+            26
         );
     }
 
-    line(cx-s*.61,cy+s*.02,cx-s*.35,cy+s*.12,12);
-    line(cx+s*.61,cy+s*.02,cx+s*.35,cy+s*.12,12);
 
-    break;
-}
+    /* ===== 眉 ===== */
 
-case "岩手県_岩手銀行赤レンガ館": {
-    const w=s*1.08;
-    const h=s*1.05;
+    for(let k=0;k<3;k++){
 
-    /* 中央の高い八角形塔 */
-    line(cx-w*.28,cy-h*.48,cx-w*.28,cy+h*.45,22);
-    line(cx+w*.28,cy-h*.48,cx+w*.28,cy+h*.45,22);
+        line(
+            cx-s*.48,
+            cy-s*(.40-k*.035),
+            cx-s*.08,
+            cy-s*(.28-k*.035),
+            22
+        );
 
-    poly([
-        {x:cx-w*.30,y:cy-h*.48},
-        {x:cx-w*.23,y:cy-h*.66},
-        {x:cx-w*.10,y:cy-h*.75},
-        {x:cx+w*.10,y:cy-h*.75},
-        {x:cx+w*.23,y:cy-h*.66},
-        {x:cx+w*.30,y:cy-h*.48}
-    ],22);
+        line(
+            cx+s*.48,
+            cy-s*(.40-k*.035),
+            cx+s*.08,
+            cy-s*(.28-k*.035),
+            22
+        );
 
-    /* 中央ドーム */
-    poly([
-        {x:cx-w*.23,y:cy-h*.66},
-        {x:cx-w*.16,y:cy-h*.78},
-        {x:cx,y:cy-h*.86},
-        {x:cx+w*.16,y:cy-h*.78},
-        {x:cx+w*.23,y:cy-h*.66}
-    ],22);
+    }
 
-    line(cx-w*.08,cy-h*.86,cx-w*.08,cy-h*.98,14);
-    line(cx+w*.08,cy-h*.86,cx+w*.08,cy-h*.98,14);
-    line(cx-w*.08,cy-h*.98,cx+w*.08,cy-h*.98,14);
-    line(cx,cy-h*.98,cx,cy-h*1.10,12);
-    ellipse(cx,cy-h*1.13,s*.035,s*.035,16);
 
-    /* 两侧圆形时钟 */
-    ellipse(cx-w*.20,cy-h*.58,s*.10,s*.10,28);
-    ellipse(cx+w*.20,cy-h*.58,s*.10,s*.10,28);
-    line(cx-w*.20,cy-h*.58,cx-w*.20,cy-h*.64,8);
-    line(cx+w*.20,cy-h*.58,cx+w*.25,cy-h*.58,8);
-
-    /* 中央拱窗 */
-    poly([
-        {x:cx-w*.14,y:cy-h*.22},
-        {x:cx-w*.14,y:cy-h*.39},
-        {x:cx,y:cy-h*.49},
-        {x:cx+w*.14,y:cy-h*.39},
-        {x:cx+w*.14,y:cy-h*.22}
-    ],16);
-    line(cx,cy-h*.47,cx,cy-h*.23,9);
-    line(cx-w*.13,cy-h*.32,cx+w*.13,cy-h*.32,9);
-
-    /* 中央入口 */
-    poly([
-        {x:cx-w*.17,y:cy+h*.45},
-        {x:cx-w*.17,y:cy+h*.15},
-        {x:cx-w*.12,y:cy+h*.05},
-        {x:cx,y:cy-h*.04},
-        {x:cx+w*.12,y:cy+h*.05},
-        {x:cx+w*.17,y:cy+h*.15},
-        {x:cx+w*.17,y:cy+h*.45}
-    ],20);
-
-    /* 左右翼楼 */
-    line(cx-w*.86,cy-h*.05,cx-w*.86,cy+h*.45,20);
-    line(cx+w*.86,cy-h*.05,cx+w*.86,cy+h*.45,20);
+    /* ===== 目 ===== */
 
     poly([
-        {x:cx-w*.88,y:cy-h*.05},
-        {x:cx-w*.72,y:cy-h*.25},
-        {x:cx-w*.48,y:cy-h*.18},
-        {x:cx-w*.28,y:cy-h*.34}
-    ],20);
+        {x:cx-s*.47,y:cy-s*.22},
+        {x:cx-s*.25,y:cy-s*.34},
+        {x:cx-s*.07,y:cy-s*.20},
+        {x:cx-s*.25,y:cy-s*.08}
+    ], 24);
 
     poly([
-        {x:cx+w*.88,y:cy-h*.05},
-        {x:cx+w*.72,y:cy-h*.25},
-        {x:cx+w*.48,y:cy-h*.18},
-        {x:cx+w*.28,y:cy-h*.34}
-    ],20);
+        {x:cx+s*.47,y:cy-s*.22},
+        {x:cx+s*.25,y:cy-s*.34},
+        {x:cx+s*.07,y:cy-s*.20},
+        {x:cx+s*.25,y:cy-s*.08}
+    ], 24);
+
+    ellipse(
+        cx-s*.25,
+        cy-s*.21,
+        s*.055,
+        s*.09,
+        22
+    );
+
+    ellipse(
+        cx+s*.25,
+        cy-s*.21,
+        s*.055,
+        s*.09,
+        22
+    );
+
+
+    /* ===== 鼻 ===== */
+
+    line(
+        cx-s*.10,
+        cy-s*.16,
+        cx-s*.14,
+        cy+s*.18,
+        18
+    );
+
+    line(
+        cx+s*.10,
+        cy-s*.16,
+        cx+s*.14,
+        cy+s*.18,
+        18
+    );
+
+    poly([
+        {x:cx-s*.16,y:cy+s*.16},
+        {x:cx-s*.10,y:cy+s*.27},
+        {x:cx,y:cy+s*.31},
+        {x:cx+s*.10,y:cy+s*.27},
+        {x:cx+s*.16,y:cy+s*.16}
+    ], 20);
+
+
+    /* ===== 大きく開いた口 ===== */
+
+    poly([
+        {x:cx-s*.43,y:cy+s*.34},
+        {x:cx-s*.18,y:cy+s*.28},
+        {x:cx,y:cy+s*.34},
+        {x:cx+s*.18,y:cy+s*.28},
+        {x:cx+s*.43,y:cy+s*.34},
+        {x:cx+s*.27,y:cy+s*.56},
+        {x:cx,y:cy+s*.61},
+        {x:cx-s*.27,y:cy+s*.56}
+    ], 24);
+
+
+    /* ===== 歯 ===== */
+
+    line(
+        cx-s*.30,
+        cy+s*.40,
+        cx+s*.30,
+        cy+s*.40,
+        28
+    );
+
+    for(let i=-3;i<=3;i++){
+
+        line(
+            cx+i*s*.075,
+            cy+s*.39,
+            cx+i*s*.075,
+            cy+s*.48,
+            9
+        );
+
+    }
+
+
+    /* ===== 頬の模様 ===== */
+
+    for(let i=0;i<3;i++){
+
+        line(
+            cx-s*(.50-i*.05),
+            cy+s*(.04+i*.08),
+            cx-s*(.28-i*.03),
+            cy+s*(.12+i*.08),
+            14
+        );
+
+        line(
+            cx+s*(.50-i*.05),
+            cy+s*(.04+i*.08),
+            cx+s*(.28-i*.03),
+            cy+s*(.12+i*.08),
+            14
+        );
+
+    }
+
+
+    /* ===== 左右の飾り ===== */
 
     for(let side of [-1,1]){
-        for(let i=0;i<2;i++){
-            const px=cx+side*w*(.48+i*.25);
+
+        for(let i=0;i<3;i++){
 
             line(
-                px-side*s*.08,cy-h*.02,
-                px-side*s*.08,cy-h*.20,10
+                cx + side*s*.70,
+                cy-s*.14 + i*s*.10,
+                cx + side*s*.96,
+                cy-s*.12 + i*s*.10,
+                16
             );
-            line(
-                px+side*s*.08,cy-h*.02,
-                px+side*s*.08,cy-h*.20,10
-            );
-            ellipse(px,cy-h*.20,s*.08,s*.08,24);
+
         }
+
     }
 
-    /* 左右小塔 */
-    for(let side of [-1,1]){
-        const tx=cx+side*w*.78;
-        line(tx,cy-h*.02,tx,cy+h*.43,16);
 
-        poly([
-            {x:tx-side*w*.14,y:cy-h*.02},
-            {x:tx,y:cy-h*.25},
-            {x:tx+side*w*.14,y:cy-h*.02}
-        ],18);
+    /* ===== 下部の衣装 ===== */
 
-        ellipse(tx,cy-h*.12,s*.055,s*.055,18);
-        line(tx,cy-h*.25,tx,cy-h*.38,10);
-    }
+    line(
+        cx-s*.34,
+        cy+s*.70,
+        cx-s*.48,
+        cy+s*.96,
+        22
+    );
 
-    line(cx-w*.88,cy+h*.45,cx+w*.88,cy+h*.45,26);
+    line(
+        cx+s*.34,
+        cy+s*.70,
+        cx+s*.48,
+        cy+s*.96,
+        22
+    );
+
+    line(
+        cx-s*.48,
+        cy+s*.96,
+        cx+s*.48,
+        cy+s*.96,
+        28
+    );
 
     break;
 }
 
-case "岩手県_わんこそば": {
+        case "岩手県_中尊寺金色堂": {
+            const w=s*.95,h=s*1.15;
+            line(cx-w*.72,cy+h*.55,cx+w*.72,cy+h*.55,32);
+            line(cx-w*.55,cy+h*.55,cx-w*.55,cy-h*.05,25);
+            line(cx+w*.55,cy+h*.55,cx+w*.55,cy-h*.05,25);
+            poly([{x:cx-w*.68,y:cy-h*.05},{x:cx,y:cy-h*.48},{x:cx+w*.68,y:cy-h*.05}],30);
+            line(cx-w*.42,cy+h*.12,cx+w*.42,cy+h*.12,22);
+            line(cx-w*.42,cy+h*.12,cx-w*.42,cy-h*.25,22);
+            line(cx+w*.42,cy+h*.12,cx+w*.42,cy-h*.25,22);
+            poly([{x:cx-w*.50,y:cy-h*.25},{x:cx,y:cy-h*.58},{x:cx+w*.50,y:cy-h*.25}],24);
+            for(let x of [-.36,-.12,.12,.36]) line(cx+w*x,cy-h*.18,cx+w*x,cy+h*.48,14);
+            break;
+        }
 
-    /* 三つの大きな椀＋少量のそば */
+        case "岩手県_わんこそば": {
+            ellipse(cx,cy+s*.12,s*.68,s*.25,80);
+            line(cx-s*.68,cy+s*.12,cx-s*.54,cy+s*.62,30);
+            line(cx+s*.68,cy+s*.12,cx+s*.54,cy+s*.62,30);
+            line(cx-s*.54,cy+s*.62,cx+s*.54,cy+s*.62,30);
+            ellipse(cx,cy+s*.02,s*.56,s*.16,60);
+            line(cx+s*.15,cy-s*.45,cx+s*.60,cy-s*.75,15);
+            line(cx+s*.25,cy-s*.34,cx+s*.70,cy-s*.62,15);
+            for(let r=0;r<3;r++) ellipse(cx-s*.10+r*s*.10,cy-s*.03+r*s*.03,s*.18,s*.06,20);
+            break;
+        }
 
-    const bowls = [
-        [-.48,.05],
-        [0,-.12],
-        [.48,.05]
-    ];
-
-    for(const [bx,by] of bowls){
-        const x=cx+s*bx;
-        const y=cy+s*by;
-        const bw=s*.30;
-        const bh=s*.16;
-
-        ellipse(x,y,bw,bh,60);
-
-        line(x-bw,y,x-bw*.72,y+s*.24,20);
-        line(x+bw,y,x+bw*.72,y+s*.24,20);
-        line(x-bw*.72,y+s*.24,x+bw*.72,y+s*.24,20);
-
-        line(x-s*.10,y-s*.015,x+s*.07,y+s*.025,9);
-        line(x-s*.06,y+s*.035,x+s*.10,y-s*.005,9);
-        line(x-s*.025,y-s*.035,x+s*.12,y+s*.015,8);
-    }
-
-    break;
-}
-
-case "岩手県_南部鉄器": {
+        case "岩手県_南部鉄器": {
             ellipse(cx,cy+s*.18,s*.58,s*.52,85);
             ellipse(cx,cy-s*.22,s*.55,s*.16,55);
             ellipse(cx,cy-s*.37,s*.34,s*.15,45);
@@ -2392,726 +2644,75 @@ case "岩手県_南部鉄器": {
             break;
         }
 
-        case "宮城県_伊達政宗公像": {
-
-    /* ===== 伊達政宗公像：骑马像 ===== */
-
-    ellipse(cx-s*.05,cy+s*.25,s*.66,s*.30,70);
-
-    line(cx+s*.30,cy+s*.18,cx+s*.45,cy-s*.18,22);
-    line(cx+s*.45,cy-s*.18,cx+s*.35,cy-s*.38,20);
-
-    poly([
-        {x:cx+s*.25,y:cy-s*.40},
-        {x:cx+s*.50,y:cy-s*.48},
-        {x:cx+s*.64,y:cy-s*.34},
-        {x:cx+s*.46,y:cy-s*.22},
-        {x:cx+s*.27,y:cy-s*.27}
-    ],20);
-
-    poly([
-        {x:cx+s*.32,y:cy-s*.43},
-        {x:cx+s*.28,y:cy-s*.63},
-        {x:cx+s*.40,y:cy-s*.48}
-    ],14);
-
-    line(cx-s*.30,cy+s*.38,cx-s*.36,cy+s*.80,18);
-    line(cx-s*.05,cy+s*.42,cx-s*.09,cy+s*.82,18);
-    line(cx+s*.25,cy+s*.40,cx+s*.30,cy+s*.82,18);
-    line(cx+s*.45,cy+s*.30,cx+s*.53,cy+s*.74,18);
-
-    line(cx-s*.55,cy+s*.20,cx-s*.80,cy+s*.02,16);
-    line(cx-s*.76,cy+s*.04,cx-s*.84,cy+s*.27,12);
-
-    /* 伊達政宗 */
-    ellipse(cx-s*.04,cy-s*.20,s*.27,s*.43,55);
-    ellipse(cx-s*.06,cy-s*.59,s*.18,s*.19,38);
-
-    line(cx-s*.22,cy-s*.32,cx+s*.17,cy-s*.32,18);
-
-    line(cx-s*.18,cy-s*.25,cx-s*.43,cy-s*.04,16);
-    line(cx+s*.13,cy-s*.24,cx+s*.38,cy-s*.05,16);
-
-    line(cx+s*.18,cy-s*.04,cx+s*.53,cy-s*.34,12);
-
-    /* 巨大三日月前立 */
-    poly([
-        {x:cx-s*.25,y:cy-s*.67},
-        {x:cx-s*.10,y:cy-s*.86},
-        {x:cx+s*.05,y:cy-s*.98},
-        {x:cx+s*.23,y:cy-s*.88},
-        {x:cx+s*.31,y:cy-s*.70},
-        {x:cx+s*.16,y:cy-s*.79},
-        {x:cx+s*.02,y:cy-s*.81},
-        {x:cx-s*.10,y:cy-s*.70}
-    ],24);
-
-    break;
-}
-
-case "宮城県_牛タン": {
-
-    /* ===== 牛タン：厚みのある一枚＋焼き目 ===== */
-
-    poly([
-        {x:cx-s*.72,y:cy-s*.22},
-        {x:cx-s*.58,y:cy-s*.40},
-        {x:cx-s*.25,y:cy-s*.50},
-        {x:cx+s*.20,y:cy-s*.45},
-        {x:cx+s*.58,y:cy-s*.28},
-        {x:cx+s*.72,y:cy-s*.08},
-        {x:cx+s*.62,y:cy+s*.18},
-        {x:cx+s*.32,y:cy+s*.35},
-        {x:cx-s*.08,y:cy+s*.40},
-        {x:cx-s*.45,y:cy+s*.30},
-        {x:cx-s*.68,y:cy+s*.08}
-    ],28);
-
-    line(cx-s*.60,cy-s*.28,cx-s*.35,cy-s*.36,10);
-    line(cx-s*.48,cy-s*.32,cx-s*.23,cy-s*.39,10);
-    line(cx-s*.30,cy-s*.38,cx-s*.05,cy-s*.40,10);
-    line(cx-s*.10,cy-s*.37,cx+s*.16,cy-s*.33,10);
-    line(cx+s*.10,cy-s*.30,cx+s*.36,cy-s*.24,10);
-    line(cx+s*.30,cy-s*.20,cx+s*.54,cy-s*.13,10);
-
-    line(cx-s*.55,cy-s*.02,cx-s*.20,cy+s*.12,8);
-    line(cx-s*.25,cy+s*.02,cx+s*.08,cy+s*.17,8);
-    line(cx+s*.05,cy+s*.08,cx+s*.35,cy+s*.20,8);
-
-    break;
-}
-
-case "宮城県_伊達政宗の兜": {
-
-    /* ===== 伊達政宗の兜：巨大な弦月＋左右非対称 ===== */
-
-    const w = s * 1.05;
-
-    /* ===== 巨大な弦月の前立 ===== */
-    /* 月を画面上部まで伸ばし、兜全体の主役にする */
-    poly([
-        /* 左端 */
-        {x:cx-s*.60,y:cy-s*.58},
-
-        /* 外侧：中央向下弯，形成「上开口」的月牙 */
-        {x:cx-s*.48,y:cy-s*.18},
-        {x:cx-s*.20,y:cy+s*.03},
-        {x:cx+s*.08,y:cy+s*.08},
-        {x:cx+s*.36,y:cy-s*.02},
-        {x:cx+s*.62,y:cy-s*.22},
-        {x:cx+s*.86,y:cy-s*.58},
-
-        /* 内侧：从右端回到左端，保持月牙的上方开口 */
-        {x:cx+s*.62,y:cy-s*.46},
-        {x:cx+s*.38,y:cy-s*.30},
-        {x:cx+s*.12,y:cy-s*.22},
-        {x:cx-s*.12,y:cy-s*.22},
-        {x:cx-s*.34,y:cy-s*.31},
-        {x:cx-s*.50,y:cy-s*.45}
-    ], 28);
-
-
-    /* ===== 兜本体 ===== */
-    poly([
-        {x:cx-s*.46,y:cy+s*.20},
-        {x:cx-s*.43,y:cy-s*.18},
-        {x:cx-s*.28,y:cy-s*.39},
-        {x:cx-s*.12,y:cy-s*.48},
-        {x:cx+s*.12,y:cy-s*.48},
-        {x:cx+s*.30,y:cy-s*.38},
-        {x:cx+s*.43,y:cy-s*.16},
-        {x:cx+s*.48,y:cy+s*.20}
-    ], 24);
-
-    /* 兜の下端 */
-    line(
-        cx-s*.48,cy+s*.20,
-        cx+s*.48,cy+s*.20,
-        20
-    );
-
-
-    /* ===== 左右非対称的な吹返し ===== */
-
-    /* 左：大きく外へ広がる */
-    poly([
-        {x:cx-s*.38,y:cy-s*.20},
-        {x:cx-s*.70,y:cy-s*.12},
-        {x:cx-s*.88,y:cy+s*.08},
-        {x:cx-s*.78,y:cy+s*.36},
-        {x:cx-s*.50,y:cy+s*.22}
-    ], 22);
-
-    /* 左側の内側線 */
-    line(
-        cx-s*.40,cy-s*.08,
-        cx-s*.72,cy+s*.08,
-        12
-    );
-
-
-    /* 右：短く、少し上向き */
-    poly([
-        {x:cx+s*.37,y:cy-s*.22},
-        {x:cx+s*.62,y:cy-s*.30},
-        {x:cx+s*.79,y:cy-s*.14},
-        {x:cx+s*.70,y:cy+s*.18},
-        {x:cx+s*.46,y:cy+s*.12}
-    ], 20);
-
-    line(
-        cx+s*.40,cy-s*.08,
-        cx+s*.69,cy-s*.18,
-        11
-    );
-
-
-    /* ===== 中央面頬 ===== */
-    poly([
-        {x:cx-s*.18,y:cy+s*.20},
-        {x:cx-s*.14,y:cy+s*.47},
-        {x:cx,y:cy+s*.60},
-        {x:cx+s*.15,y:cy+s*.48},
-        {x:cx+s*.18,y:cy+s*.20}
-    ], 18);
-
-
-    /* ===== 中央纵向结构 ===== */
-    line(
-        cx,
-        cy-s*.43,
-        cx,
-        cy+s*.20,
-        12
-    );
-
-
-    /* ===== 左右装饰：故意不同 ===== */
-
-    /* 左边较低 */
-    line(
-        cx-s*.27,cy+s*.23,
-        cx-s*.38,cy+s*.57,
-        12
-    );
-
-    line(
-        cx-s*.38,cy+s*.57,
-        cx-s*.27,cy+s*.73,
-        10
-    );
-
-    /* 右边较长并向外 */
-    line(
-        cx+s*.27,cy+s*.23,
-        cx+s*.42,cy+s*.53,
-        13
-    );
-
-    line(
-        cx+s*.42,cy+s*.53,
-        cx+s*.61,cy+s*.69,
-        11
-    );
-
-
-    /* ===== 小型铠甲纹理 ===== */
-    line(
-        cx-s*.31,cy-s*.31,
-        cx-s*.18,cy-s*.39,
-        9
-    );
-
-    line(
-        cx+s*.18,cy-s*.39,
-        cx+s*.32,cy-s*.28,
-        9
-    );
-
-    break;
-}
-
-case "群馬県_温泉": {
-            /* ===== 温泉：参考图标的造形 ===== */
-            const w = s * .80;
-            const h = s * .78;
-
-            /* 下方浅碟形浴池 */
-            poly([
-                {x:cx-w*.92,y:cy+h*.12},
-                {x:cx-w*.84,y:cy+h*.30},
-                {x:cx-w*.62,y:cy+h*.48},
-                {x:cx-w*.30,y:cy+h*.61},
-                {x:cx,y:cy+h*.65},
-                {x:cx+w*.30,y:cy+h*.61},
-                {x:cx+w*.62,y:cy+h*.48},
-                {x:cx+w*.84,y:cy+h*.30},
-                {x:cx+w*.92,y:cy+h*.12}
-            ], 34);
-
-            /* 三条独立的热气线 */
-            poly([
-                {x:cx-s*.50,y:cy+s*.04},
-                {x:cx-s*.57,y:cy-s*.12},
-                {x:cx-s*.58,y:cy-s*.30},
-                {x:cx-s*.53,y:cy-s*.47},
-                {x:cx-s*.44,y:cy-s*.61},
-                {x:cx-s*.36,y:cy-s*.74}
-            ], 30);
-
-            poly([
-                {x:cx-s*.05,y:cy+s*.05},
-                {x:cx-s*.12,y:cy-s*.13},
-                {x:cx-s*.13,y:cy-s*.31},
-                {x:cx-s*.08,y:cy-s*.50},
-                {x:cx+s*.02,y:cy-s*.70},
-                {x:cx+s*.08,y:cy-s*.86}
-            ], 32);
-
-            poly([
-                {x:cx+s*.39,y:cy+s*.04},
-                {x:cx+s*.31,y:cy-s*.12},
-                {x:cx+s*.30,y:cy-s*.30},
-                {x:cx+s*.34,y:cy-s*.46},
-                {x:cx+s*.43,y:cy-s*.61},
-                {x:cx+s*.50,y:cy-s*.74}
-            ], 30);
-
+        case "宮城県_瑞鳳殿": {
+            const w=s*.95,h=s*1.15;
+            line(cx-w*.70,cy+h*.62,cx+w*.70,cy+h*.62,30);
+            line(cx-w*.55,cy+h*.50,cx+w*.55,cy+h*.50,25);
+            line(cx-w*.48,cy+h*.50,cx-w*.48,cy-h*.12,24);
+            line(cx+w*.48,cy+h*.50,cx+w*.48,cy-h*.12,24);
+            poly([{x:cx-w*.62,y:cy-h*.12},{x:cx,y:cy-h*.52},{x:cx+w*.62,y:cy-h*.12}],28);
+            poly([{x:cx-w*.25,y:cy-h*.15},{x:cx,y:cy-h*.42},{x:cx+w*.25,y:cy-h*.15}],20);
+            for(let x of [-.32,0,.32]) line(cx+w*x,cy-h*.10,cx+w*x,cy+h*.45,14);
             break;
         }
 
-        case "群馬県_こんにゃく": {
-            /* こんにゃく：大きな板こんにゃく＋切り込み */
-            const w=s*.70;
-            const h=s*.50;
-
-            poly([
-                {x:cx-w*.82,y:cy-h*.55},
-                {x:cx-w*.58,y:cy-h*.70},
-                {x:cx+w*.55,y:cy-h*.64},
-                {x:cx+w*.82,y:cy-h*.38},
-                {x:cx+w*.72,y:cy+h*.55},
-                {x:cx+w*.35,y:cy+h*.70},
-                {x:cx-w*.62,y:cy+h*.58},
-                {x:cx-w*.82,y:cy+h*.28}
-            ],26);
-
-            /* 表面の包丁筋 */
-            for(let i=-3;i<=3;i++){
-                line(
-                    cx+i*s*.14-s*.05,
-                    cy-h*.30,
-                    cx+i*s*.14+s*.10,
-                    cy+h*.42,
-                    8
-                );
-            }
-
-            /* 中央の切れ込み */
-            line(cx-s*.42,cy-s*.02,cx+s*.38,cy+s*.18,8);
-            line(cx-s*.32,cy+s*.18,cx+s*.46,cy+s*.34,8);
-
+        case "宮城県_牛タン": {
+            poly([{x:cx-s*.62,y:cy-s*.30},{x:cx-s*.42,y:cy-s*.48},{x:cx+s*.35,y:cy-s*.42},{x:cx+s*.62,y:cy-s*.05},{x:cx+s*.48,y:cy+s*.38},{x:cx,y:cy+s*.55},{x:cx-s*.38,y:cy+s*.32}],35);
+            for(let i=-2;i<=2;i++) line(cx-s*.25,cy+i*s*.14,cx+s*.30,cy+i*s*.10,12);
             break;
         }
 
-        case "群馬県_だるま": {
-            /* ===== だるま：参考图的正面简洁轮廓 ===== */
-            const w = s * .82;
-            const h = s * .88;
-
-            /* 圆形本体 */
-            ellipse(cx,cy+s*.02,w,h,96);
-
-            /* ===== 白色脸部轮廓 ===== */
-            poly([
-                {x:cx-w*.52,y:cy-h*.16},
-                {x:cx-w*.45,y:cy-h*.34},
-                {x:cx-w*.28,y:cy-h*.47},
-                {x:cx,y:cy-h*.51},
-                {x:cx+w*.28,y:cy-h*.47},
-                {x:cx+w*.45,y:cy-h*.34},
-                {x:cx+w*.52,y:cy-h*.16},
-                {x:cx+w*.47,y:cy+h*.07},
-                {x:cx+w*.30,y:cy+h*.18},
-                {x:cx,y:cy+h*.21},
-                {x:cx-w*.30,y:cy+h*.18},
-                {x:cx-w*.47,y:cy+h*.07}
-            ], 26);
-
-            /* ===== 小圆眼睛 ===== */
-            ellipse(cx-s*.19,cy-s*.16,s*.038,s*.038,24);
-            ellipse(cx+s*.19,cy-s*.16,s*.038,s*.038,24);
-
-            /* ===== 左侧胡须 ===== */
-            poly([
-                {x:cx-s*.02,y:cy+s*.02},
-                {x:cx-s*.13,y:cy+s*.01},
-                {x:cx-s*.22,y:cy+s*.07},
-                {x:cx-s*.30,y:cy+s*.14},
-                {x:cx-s*.22,y:cy+s*.20},
-                {x:cx-s*.11,y:cy+s*.17},
-                {x:cx,y:cy+s*.10}
-            ], 22);
-
-            /* ===== 右侧胡须 ===== */
-            poly([
-                {x:cx+s*.02,y:cy+s*.02},
-                {x:cx+s*.13,y:cy+s*.01},
-                {x:cx+s*.22,y:cy+s*.07},
-                {x:cx+s*.30,y:cy+s*.14},
-                {x:cx+s*.22,y:cy+s*.20},
-                {x:cx+s*.11,y:cy+s*.17},
-                {x:cx,y:cy+s*.10}
-            ], 22);
-
-            /* ===== 下方三条装饰 ===== */
-            poly([
-                {x:cx-s*.38,y:cy+s*.31},
-                {x:cx-s*.28,y:cy+s*.48},
-                {x:cx-s*.17,y:cy+s*.62}
-            ], 18);
-
-            poly([
-                {x:cx-s*.04,y:cy+s*.32},
-                {x:cx,y:cy+s*.52},
-                {x:cx+s*.04,y:cy+s*.65}
-            ], 18);
-
-            poly([
-                {x:cx+s*.38,y:cy+s*.31},
-                {x:cx+s*.28,y:cy+s*.48},
-                {x:cx+s*.17,y:cy+s*.62}
-            ], 18);
-
+        case "宮城県_伊達政宗の兜": {
+            ellipse(cx,cy+s*.15,s*.58,s*.50,80);
+            poly([{x:cx-s*.50,y:cy-s*.15},{x:cx-s*.32,y:cy-s*.55},{x:cx,y:cy-s*.82},{x:cx+s*.32,y:cy-s*.55},{x:cx+s*.50,y:cy-s*.15},{x:cx+s*.18,y:cy-s*.38},{x:cx,y:cy-s*.48},{x:cx-s*.18,y:cy-s*.38}],20);
+            poly([{x:cx-s*.56,y:cy+s*.05},{x:cx-s*.82,y:cy-s*.05},{x:cx-s*.72,y:cy+s*.30}],20);
+            poly([{x:cx+s*.56,y:cy+s*.05},{x:cx+s*.82,y:cy-s*.05},{x:cx+s*.72,y:cy+s*.30}],20);
             break;
         }
 
-case "秋田県_大館樹海ドーム": {
-            /* 大館樹海ドーム：柔らかな卵形ドーム＋木造アーチ */
-            const w=s*1.18;
-            const h=s*.88;
-
-            /* 外形：大きな卵形ドーム */
-            poly([
-                {x:cx-w*.92,y:cy+h*.40},
-                {x:cx-w*.76,y:cy+h*.05},
-                {x:cx-w*.54,y:cy-h*.34},
-                {x:cx-w*.25,y:cy-h*.62},
-                {x:cx,y:cy-h*.72},
-                {x:cx+w*.25,y:cy-h*.62},
-                {x:cx+w*.54,y:cy-h*.34},
-                {x:cx+w*.76,y:cy+h*.05},
-                {x:cx+w*.92,y:cy+h*.40}
-            ],26);
-
-            /* 下部基座 */
-            line(cx-w*.92,cy+h*.40,cx+w*.92,cy+h*.40,24);
-            line(cx-w*.82,cy+h*.52,cx+w*.82,cy+h*.52,18);
-
-            /* 木造アーチを強調 */
-            for(let i=-4;i<=4;i++){
-                const x=cx+i*s*.16;
-                line(
-                    x-s*.03,
-                    cy+h*.39,
-                    x-s*.11,
-                    cy+h*.02,
-                    10
-                );
-                line(
-                    x-s*.11,
-                    cy+h*.02,
-                    x,
-                    cy-h*.45,
-                    12
-                );
-                line(
-                    x,
-                    cy-h*.45,
-                    x+s*.11,
-                    cy+h*.02,
-                    12
-                );
-                line(
-                    x+s*.11,
-                    cy+h*.02,
-                    x+s*.03,
-                    cy+h*.39,
-                    10
-                );
-            }
-
-            /* 横向きの構造線 */
-            line(cx-w*.72,cy+h*.08,cx+w*.72,cy+h*.08,10);
-            line(cx-w*.52,cy-h*.18,cx+w*.52,cy-h*.18,10);
-            line(cx-w*.30,cy-h*.40,cx+w*.30,cy-h*.40,10);
-
+        case "秋田県_横手城": {
+            const w=s*.9,h=s*1.2;
+            poly([{x:cx-w*.72,y:cy+h*.58},{x:cx-w*.50,y:cy+h*.18},{x:cx+w*.50,y:cy+h*.18},{x:cx+w*.72,y:cy+h*.58}],28);
+            line(cx-w*.42,cy+h*.18,cx-w*.42,cy-h*.35,24);
+            line(cx+w*.42,cy+h*.18,cx+w*.42,cy-h*.35,24);
+            poly([{x:cx-w*.52,y:cy-h*.35},{x:cx,y:cy-h*.62},{x:cx+w*.52,y:cy-h*.35}],24);
+            line(cx-w*.60,cy-h*.05,cx,cy-h*.32,22);
+            line(cx,cy-h*.32,cx+w*.60,cy-h*.05,22);
+            ellipse(cx,cy-h*.20,w*.12,h*.10,20);
             break;
         }
 
         case "秋田県_きりたんぽ": {
-            /* きりたんぽ：大きな一本の米棒を、串と焼き目まで明確に見せる */
-            const dx = s * .92;
-            const dy = s * .10;
-            const len = s * .88;
-            const nx = -dy;
-            const ny = dx;
-            const nlen = Math.sqrt(nx*nx + ny*ny);
-            const ux = dx / Math.sqrt(dx*dx + dy*dy);
-            const uy = dy / Math.sqrt(dx*dx + dy*dy);
-            const px = nx / nlen;
-            const py = ny / nlen;
-
-            const x1 = cx - ux * len * .50;
-            const y1 = cy - uy * len * .50;
-            const x2 = cx + ux * len * .50;
-            const y2 = cy + uy * len * .50;
-            const r = s * .16;
-
-            /* ===== 串：先に描いて本体の後ろにする ===== */
-            line(
-                x1 - ux*s*.26,
-                y1 - uy*s*.26,
-                x2 + ux*s*.22,
-                y2 + uy*s*.22,
-                12
-            );
-
-            /* ===== きりたんぽ本体：太い筒状の輪郭 ===== */
-            poly([
-                {x:x1+px*r, y:y1+py*r},
-                {x:x2+px*r*.78, y:y2+py*r*.78},
-                {x:x2+px*r*.55, y:y2+py*r*.55},
-                {x:x2-px*r*.55, y:y2-py*r*.55},
-                {x:x2-px*r*.78, y:y2-py*r*.78},
-                {x:x1-px*r, y:y1-py*r}
-            ], 30);
-
-            /* 两侧轮廓线，加强米棒的立体感 */
-            line(
-                x1+px*r,
-                y1+py*r,
-                x2+px*r*.78,
-                y2+py*r*.78,
-                14
-            );
-
-            line(
-                x1-px*r,
-                y1-py*r,
-                x2-px*r*.78,
-                y2-py*r*.78,
-                14
-            );
-
-            /* 尾端圆润 */
-            ellipse(
-                x1,
-                y1,
-                r*.72,
-                r*.72,
-                18
-            );
-
-            ellipse(
-                x2,
-                y2,
-                r*.58,
-                r*.58,
-                18
-            );
-
-            /* ===== 明显的烤痕：沿棒身横向重复 ===== */
-            for(let i=1;i<=6;i++){
-                const t=i/7;
-                const x=x1+(x2-x1)*t;
-                const y=y1+(y2-y1)*t;
-
-                line(
-                    x-px*r*.72,
-                    y-py*r*.72,
-                    x+px*r*.72,
-                    y+py*r*.72,
-                    9
-                );
-            }
-
-            /* ===== 串尾露出的部分 ===== */
-            line(
-                x2,
-                y2,
-                x2+ux*s*.25,
-                y2+uy*s*.25,
-                10
-            );
-
+            const x1=cx-s*.52,y1=cy+s*.48,x2=cx+s*.48,y2=cy-s*.45;
+            line(x1,y1,x2,y2,30);
+            line(x1-s*.10,y1-s*.06,x2-s*.10,y2-s*.06,20);
+            line(x1+s*.10,y1+s*.06,x2+s*.10,y2+s*.06,20);
+            line(cx+s*.50,cy-s*.48,cx+s*.76,cy-s*.72,16);
+            for(let i=-2;i<=2;i++){const t=(i+3)/6,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;line(x-s*.09,y-s*.02,x+s*.09,y+s*.02,10);}
             break;
         }
 
         case "秋田県_秋田犬": {
-            /* 秋田犬：卷尾＋立耳＋犬脸和身体 */
-
-            /* 身体 */
-            ellipse(
-                cx+s*.05,
-                cy+s*.20,
-                s*.58,
-                s*.32,
-                65
-            );
-
-            /* 头 */
-            ellipse(
-                cx-s*.43,
-                cy-s*.08,
-                s*.30,
-                s*.31,
-                50
-            );
-
-            /* 左耳 */
-            poly([
-                {x:cx-s*.64,y:cy-s*.22},
-                {x:cx-s*.58,y:cy-s*.66},
-                {x:cx-s*.40,y:cy-s*.34}
-            ],20);
-
-            /* 右耳 */
-            poly([
-                {x:cx-s*.31,y:cy-s*.32},
-                {x:cx-s*.22,y:cy-s*.70},
-                {x:cx-s*.10,y:cy-s*.24}
-            ],18);
-
-            /* 眼睛 */
-            ellipse(cx-s*.51,cy-s*.10,s*.035,s*.035,14);
-            ellipse(cx-s*.32,cy-s*.10,s*.035,s*.035,14);
-
-            /* 鼻口 */
-            ellipse(cx-s*.43,cy+s*.03,s*.055,s*.045,18);
-            line(cx-s*.43,cy+s*.08,cx-s*.43,cy+s*.15,10);
-            line(cx-s*.43,cy+s*.15,cx-s*.52,cy+s*.18,9);
-            line(cx-s*.43,cy+s*.15,cx-s*.34,cy+s*.18,9);
-
-            /* 四脚 */
-            line(cx-s*.18,cy+s*.40,cx-s*.22,cy+s*.78,16);
-            line(cx+s*.02,cy+s*.43,cx-s*.01,cy+s*.80,16);
-            line(cx+s*.24,cy+s*.39,cx+s*.30,cy+s*.78,16);
-            line(cx+s*.43,cy+s*.34,cx+s*.50,cy+s*.70,16);
-
-            /* 卷尾 */
-            line(
-                cx+s*.55,cy+s*.08,
-                cx+s*.74,cy-s*.12,
-                16
-            );
-            line(
-                cx+s*.74,cy-s*.12,
-                cx+s*.68,cy-s*.32,
-                14
-            );
-            line(
-                cx+s*.68,cy-s*.32,
-                cx+s*.55,cy-s*.22,
-                12
-            );
-
+            ellipse(cx-s*.08,cy+s*.22,s*.48,s*.28,65);
+            ellipse(cx-s*.43,cy-s*.10,s*.25,s*.28,50);
+            poly([{x:cx-s*.60,y:cy-s*.26},{x:cx-s*.58,y:cy-s*.68},{x:cx-s*.38,y:cy-s*.36}],18);
+            poly([{x:cx-s*.32,y:cy-s*.32},{x:cx-s*.18,y:cy-s*.68},{x:cx-s*.10,y:cy-s*.20}],18);
+            ellipse(cx-s*.62,cy-s*.08,s*.07,s*.06,18);
+            ellipse(cx+s*.48,cy-s*.02,s*.22,s*.28,35);
+            line(cx-s*.30,cy+s*.40,cx-s*.35,cy+s*.75,16);
+            line(cx-s*.02,cy+s*.40,cx-s*.05,cy+s*.75,16);
+            line(cx+s*.22,cy+s*.40,cx+s*.27,cy+s*.75,16);
             break;
         }
 
-        case "山形県_山形市郷土館": {
-            /* 山形市郷土館（旧済生館本館）を簡略化
-               特徴：八角形の三層楼＋ドーム型屋根＋周囲の回廊 */
-
-            const w = s * 1.02;
-            const h = s * 1.02;
-
-            /* ===== 最下层：八角形の建物 ===== */
-            poly([
-                {x:cx-w*.72,y:cy+h*.34},
-                {x:cx-w*.62,y:cy-h*.02},
-                {x:cx-w*.42,y:cy-h*.25},
-                {x:cx,y:cy-h*.34},
-                {x:cx+w*.42,y:cy-h*.25},
-                {x:cx+w*.62,y:cy-h*.02},
-                {x:cx+w*.72,y:cy+h*.34},
-                {x:cx+w*.58,y:cy+h*.55},
-                {x:cx-w*.58,y:cy+h*.55}
-            ], 20);
-
-            /* ===== 中层八角形 ===== */
-            poly([
-                {x:cx-w*.45,y:cy-h*.02},
-                {x:cx-w*.36,y:cy-h*.25},
-                {x:cx-w*.20,y:cy-h*.34},
-                {x:cx,y:cy-h*.38},
-                {x:cx+w*.20,y:cy-h*.34},
-                {x:cx+w*.36,y:cy-h*.25},
-                {x:cx+w*.45,y:cy-h*.02},
-                {x:cx+w*.35,y:cy+h*.18},
-                {x:cx-w*.35,y:cy+h*.18}
-            ], 18);
-
-            /* ===== 中央塔楼 ===== */
-            line(cx-w*.20,cy-h*.38,cx-w*.20,cy-h*.62,18);
-            line(cx+w*.20,cy-h*.38,cx+w*.20,cy-h*.62,18);
-
-            /* 三层楼的上段 */
-            poly([
-                {x:cx-w*.22,y:cy-h*.62},
-                {x:cx-w*.15,y:cy-h*.75},
-                {x:cx,y:cy-h*.80},
-                {x:cx+w*.15,y:cy-h*.75},
-                {x:cx+w*.22,y:cy-h*.62}
-            ], 18);
-
-            /* ===== ドーム型の緑色屋根 ===== */
-            poly([
-                {x:cx-w*.26,y:cy-h*.62},
-                {x:cx-w*.16,y:cy-h*.76},
-                {x:cx-w*.05,y:cy-h*.84},
-                {x:cx,y:cy-h*.86},
-                {x:cx+w*.05,y:cy-h*.84},
-                {x:cx+w*.16,y:cy-h*.76},
-                {x:cx+w*.26,y:cy-h*.62}
-            ], 22);
-
-            /* 屋顶顶部的小尖顶 */
-            line(cx,cy-h*.86,cx,cy-h*1.04,12);
-            ellipse(cx,cy-h*1.07,s*.035,s*.035,16);
-
-            /* ===== 正面入口 ===== */
-            poly([
-                {x:cx-w*.14,y:cy+h*.55},
-                {x:cx-w*.14,y:cy+h*.25},
-                {x:cx-w*.07,y:cy+h*.16},
-                {x:cx,y:cy+h*.12},
-                {x:cx+w*.07,y:cy+h*.16},
-                {x:cx+w*.14,y:cy+h*.25},
-                {x:cx+w*.14,y:cy+h*.55}
-            ], 18);
-
-            /* ===== 周围回廊：左右突出感 ===== */
-            line(cx-w*.70,cy+h*.34,cx-w*.90,cy+h*.34,14);
-            line(cx-w*.90,cy+h*.34,cx-w*.90,cy+h*.10,14);
-            line(cx+w*.70,cy+h*.34,cx+w*.90,cy+h*.34,14);
-            line(cx+w*.90,cy+h*.34,cx+w*.90,cy+h*.10,14);
-
-            /* ===== 柱与窗 ===== */
-            for(let x of [-.55,-.32,.32,.55]) {
-                line(cx+w*x,cy+h*.02,cx+w*x,cy+h*.46,10);
-            }
-
-            /* 上层窗 */
-            for(let x of [-.26,.26]) {
-                line(cx+w*x,cy-h*.20,cx+w*x,cy-h*.03,9);
-                line(cx+w*x-s*.07,cy-h*.20,cx+w*x+s*.07,cy-h*.20,8);
-            }
-
-            /* 下层横带 */
-            line(cx-w*.58,cy+h*.05,cx+w*.58,cy+h*.05,12);
-            line(cx-w*.62,cy+h*.28,cx+w*.62,cy+h*.28,12);
-
+        case "山形県_山寺（立石寺）": {
+            poly([{x:cx-s*.85,y:cy+s*.55},{x:cx-s*.50,y:cy+s*.10},{x:cx-s*.28,y:cy-s*.25},{x:cx,y:cy-s*.55},{x:cx+s*.25,y:cy-s*.20},{x:cx+s*.48,y:cy+s*.12},{x:cx+s*.85,y:cy+s*.55}],25);
+            line(cx-s*.10,cy-s*.38,cx-s*.10,cy+s*.05,16);
+            line(cx+s*.18,cy-s*.28,cx+s*.18,cy+s*.15,16);
+            poly([{x:cx-s*.28,y:cy-s*.38},{x:cx,y:cy-s*.52},{x:cx+s*.28,y:cy-s*.38}],18);
+            poly([{x:cx-s*.12,y:cy-s*.05},{x:cx+s*.04,y:cy-s*.17},{x:cx+s*.20,y:cy-s*.05}],18);
+            line(cx-s*.55,cy+s*.45,cx-s*.20,cy+s*.20,15);
+            line(cx-s*.20,cy+s*.20,cx+s*.05,cy+s*.05,15);
             break;
         }
 
@@ -3140,940 +2741,46 @@ case "秋田県_大館樹海ドーム": {
             break;
         }
 
-        case "福島県_桃": {
-            /* 桃：参考画像の丸くふっくらしたシルエット＋下部の葉 */
-            const w = s * .82;
-            const h = s * .74;
-
-            /* 大きな桃の実 */
-            poly([
-                {x:cx,       y:cy-h*.76},
-                {x:cx-w*.24, y:cy-h*.80},
-                {x:cx-w*.50, y:cy-h*.63},
-                {x:cx-w*.72, y:cy-h*.28},
-                {x:cx-w*.76, y:cy+h*.10},
-                {x:cx-w*.62, y:cy+h*.45},
-                {x:cx-w*.35, y:cy+h*.65},
-                {x:cx,       y:cy+h*.72},
-                {x:cx+w*.35, y:cy+h*.65},
-                {x:cx+w*.62, y:cy+h*.45},
-                {x:cx+w*.76, y:cy+h*.10},
-                {x:cx+w*.72, y:cy-h*.28},
-                {x:cx+w*.50, y:cy-h*.63},
-                {x:cx+w*.24, y:cy-h*.80}
-            ], 26);
-
-            /* 桃の中央のくぼみ */
-            line(cx,cy-h*.70,cx-s*.06,cy-h*.24,16);
-            line(cx-s*.06,cy-h*.24,cx-s*.09,cy+h*.18,12);
-            line(cx-s*.09,cy+h*.18,cx-s*.04,cy+h*.48,10);
-
-            /* 下の葉（参考画像の特徴） */
-            poly([
-                {x:cx-s*.08,y:cy+h*.53},
-                {x:cx-s*.40,y:cy+h*.66},
-                {x:cx-s*.62,y:cy+h*.58},
-                {x:cx-s*.43,y:cy+h*.42},
-                {x:cx-s*.20,y:cy+h*.38}
-            ], 18);
-
-            poly([
-                {x:cx+s*.08,y:cy+h*.53},
-                {x:cx+s*.40,y:cy+h*.66},
-                {x:cx+s*.62,y:cy+h*.58},
-                {x:cx+s*.43,y:cy+h*.42},
-                {x:cx+s*.20,y:cy+h*.38}
-            ], 18);
-
+        case "福島県_鶴ヶ城": {
+            const w=s*.95,h=s*1.2;
+            poly([{x:cx-w*.78,y:cy+h*.58},{x:cx-w*.55,y:cy+h*.20},{x:cx+w*.55,y:cy+h*.20},{x:cx+w*.78,y:cy+h*.58}],28);
+            for(let i=0;i<4;i++){
+                const yy=cy+h*.15-i*h*.18, ww=w*(.45-i*.07);
+                line(cx-ww,yy,cx+ww,yy,25);
+                line(cx-ww*.82,yy,cx-ww*.82,yy-h*.16,18);
+                line(cx+ww*.82,yy,cx+ww*.82,yy-h*.16,18);
+            }
+            poly([{x:cx-w*.42,y:cy-h*.48},{x:cx,y:cy-h*.70},{x:cx+w*.42,y:cy-h*.48}],24);
+            line(cx-w*.08,cy-h*.70,cx-w*.18,cy-h*.84,12);
+            line(cx+w*.08,cy-h*.70,cx+w*.18,cy-h*.84,12);
             break;
         }
 
-        case "福島県_アクアマリンふくしま": {
-            /* アクアマリンふくしま：海辺に面した特徴的なガラス建築 */
-            const w=s*1.02, h=s*.98;
-
-            /* 大きな三角形のガラス外形 */
-            poly([
-                {x:cx,y:cy-h*.82},
-                {x:cx-w*.82,y:cy+h*.52},
-                {x:cx+w*.82,y:cy+h*.52}
-            ], 28);
-
-            /* 水平の階層 */
-            line(cx-w*.70,cy+h*.28,cx+w*.70,cy+h*.28,14);
-            line(cx-w*.56,cy+h*.05,cx+w*.56,cy+h*.05,12);
-            line(cx-w*.42,cy-h*.18,cx+w*.42,cy-h*.18,10);
-
-            /* ガラスの放射状フレーム */
-            for(let side of [-1,1]){
-                line(cx,cy-h*.78,cx+side*w*.68,cy+h*.48,10);
-                line(cx,cy-h*.78,cx+side*w*.42,cy+h*.48,9);
-                line(cx,cy-h*.78,cx+side*w*.18,cy+h*.48,8);
-            }
-
-            /* 中央のエントランス */
-            poly([
-                {x:cx-w*.16,y:cy+h*.52},
-                {x:cx-w*.12,y:cy+h*.20},
-                {x:cx,y:cy+h*.08},
-                {x:cx+w*.12,y:cy+h*.20},
-                {x:cx+w*.16,y:cy+h*.52}
-            ], 18);
-
-            /* 海をイメージした波 */
-            line(cx-w*.86,cy+h*.62,cx-w*.45,cy+h*.62,10);
-            line(cx-w*.30,cy+h*.62,cx+w*.08,cy+h*.62,10);
-            line(cx+w*.22,cy+h*.62,cx+w*.72,cy+h*.62,10);
-
+        case "福島県_喜多方ラーメン": {
+            ellipse(cx,cy+s*.20,s*.72,s*.28,85);
+            line(cx-s*.72,cy+s*.20,cx-s*.58,cy+s*.67,30);
+            line(cx+s*.72,cy+s*.20,cx+s*.58,cy+s*.67,30);
+            line(cx-s*.58,cy+s*.67,cx+s*.58,cy+s*.67,30);
+            for(let i=-3;i<=3;i++){const yy=cy+s*.05+i*s*.045;line(cx-s*.48,yy,cx+s*.48,yy+s*.02,18);}
+            ellipse(cx-s*.30,cy-s*.03,s*.15,s*.10,24);
+            ellipse(cx+s*.30,cy-s*.03,s*.15,s*.10,24);
+            ellipse(cx,cy-s*.08,s*.12,s*.12,24);
+            line(cx-s*.10,cy-s*.22,cx+s*.12,cy-s*.32,12);
             break;
         }
 
         case "福島県_赤べこ": {
-            /* 赤べこ：参考画像の「低い胴体＋伸びた首＋角＋黒い首輪＋丸い模様」 */
-            const w = s * .82;
-            const h = s * .62;
-
-            /* 横長の胴体 */
-            poly([
-                {x:cx-w*.72,y:cy-h*.02},
-                {x:cx-w*.60,y:cy-h*.34},
-                {x:cx-w*.25,y:cy-h*.50},
-                {x:cx+w*.28,y:cy-h*.46},
-                {x:cx+w*.62,y:cy-h*.27},
-                {x:cx+w*.72,y:cy+h*.05},
-                {x:cx+w*.63,y:cy+h*.42},
-                {x:cx+w*.28,y:cy+h*.55},
-                {x:cx-w*.20,y:cy+h*.56},
-                {x:cx-w*.56,y:cy+h*.40}
-            ], 26);
-
-            /* 头颈：向左伸出 */
-            line(cx-w*.50,cy-h*.18,cx-w*.72,cy-h*.48,22);
-            line(cx-w*.72,cy-h*.48,cx-w*.86,cy-h*.22,20);
-            line(cx-w*.86,cy-h*.22,cx-w*.80,cy+h*.05,20);
-            line(cx-w*.80,cy+h*.05,cx-w*.60,cy+h*.12,18);
-
-            /* 头部 */
-            poly([
-                {x:cx-w*.86,y:cy-h*.22},
-                {x:cx-w*.98,y:cy-h*.10},
-                {x:cx-w*.92,y:cy+h*.08},
-                {x:cx-w*.72,y:cy+h*.13},
-                {x:cx-w*.65,y:cy-h*.02},
-                {x:cx-w*.72,y:cy-h*.30}
-            ], 20);
-
-            /* 角 */
-            poly([
-                {x:cx-w*.78,y:cy-h*.32},
-                {x:cx-w*.85,y:cy-h*.58},
-                {x:cx-w*.70,y:cy-h*.38}
-            ], 16);
-
-            poly([
-                {x:cx-w*.61,y:cy-h*.29},
-                {x:cx-w*.58,y:cy-h*.55},
-                {x:cx-w*.48,y:cy-h*.30}
-            ], 16);
-
-            /* 耳朵 */
-            ellipse(cx-w*.66,cy-h*.34,s*.10,s*.10,22);
-            ellipse(cx-w*.47,cy-h*.28,s*.08,s*.09,20);
-
-            /* 眼睛 */
-            ellipse(cx-w*.84,cy-h*.08,s*.045,s*.045,18);
-
-            /* 鼻孔 */
-            ellipse(cx-w*.92,cy-h*.02,s*.025,s*.025,12);
-
-            /* 黑色首圈 */
-            line(cx-w*.50,cy-h*.27,cx-w*.40,cy+h*.08,28);
-            line(cx-w*.43,cy-h*.28,cx-w*.34,cy+h*.08,16);
-
-            /* 白色圆形模様に相当する輪郭 */
-            ellipse(cx+w*.20,cy-h*.18,s*.16,s*.16,22);
-            ellipse(cx+w*.51,cy+h*.18,s*.12,s*.12,20);
-
-            /* 背中の模様 */
-            for(let i=0;i<4;i++) {
-                line(
-                    cx-w*.18+i*s*.10,
-                    cy-h*.38,
-                    cx-w*.08+i*s*.10,
-                    cy-h*.18,
-                    8
-                );
-            }
-
-            /* 四条腿を簡略化 */
-            line(cx-w*.40,cy+h*.42,cx-w*.43,cy+h*.72,16);
-            line(cx-w*.08,cy+h*.48,cx-w*.10,cy+h*.78,16);
-            line(cx+w*.34,cy+h*.42,cx+w*.38,cy+h*.72,16);
-            line(cx+w*.58,cy+h*.32,cx+w*.63,cy+h*.62,16);
-
-            /* 尾 */
-            line(cx+w*.62,cy-h*.08,cx+w*.82,cy-h*.22,14);
-            line(cx+w*.82,cy-h*.22,cx+w*.88,cy-h*.08,12);
-
-            break;
-        }
-
-        case "栃木県_日光東照宮": {
-            /* 日光東照宮：陽明門をイメージした華やかな門の正面 */
-            const w=s*1.02;
-            const h=s*.82;
-
-            /* 大きな二層屋根 */
-            line(cx-w*.78,cy-h*.30,cx-w*.58,cy-h*.45,22);
-            line(cx-w*.58,cy-h*.45,cx-w*.18,cy-h*.50,22);
-            line(cx-w*.18,cy-h*.50,cx,cy-h*.55,22);
-            line(cx,cy-h*.55,cx+w*.18,cy-h*.50,22);
-            line(cx+w*.18,cy-h*.50,cx+w*.58,cy-h*.45,22);
-            line(cx+w*.58,cy-h*.45,cx+w*.78,cy-h*.30,22);
-
-            line(cx-w*.70,cy-h*.16,cx+w*.70,cy-h*.16,20);
-            line(cx-w*.62,cy-h*.06,cx+w*.62,cy-h*.06,18);
-
-            /* 屋根の中央 */
-            poly([
-                {x:cx-w*.48,y:cy-h*.06},
-                {x:cx,y:cy-h*.35},
-                {x:cx+w*.48,y:cy-h*.06}
-            ],20);
-
-            /* 門柱 */
-            line(cx-w*.58,cy-h*.04,cx-w*.58,cy+h*.50,20);
-            line(cx-w*.28,cy-h*.04,cx-w*.28,cy+h*.50,16);
-            line(cx+w*.28,cy-h*.04,cx+w*.28,cy+h*.50,16);
-            line(cx+w*.58,cy-h*.04,cx+w*.58,cy+h*.50,20);
-
-            /* 中央入口 */
-            poly([
-                {x:cx-w*.22,y:cy+h*.50},
-                {x:cx-w*.22,y:cy+h*.12},
-                {x:cx-w*.14,y:cy-h*.01},
-                {x:cx,y:cy-h*.10},
-                {x:cx+w*.14,y:cy-h*.01},
-                {x:cx+w*.22,y:cy+h*.12},
-                {x:cx+w*.22,y:cy+h*.50}
-            ],18);
-
-            /* 装飾的な柱 */
-            for(let x of [-.48,-.36,.36,.48]){
-                line(cx+w*x,cy-h*.02,cx+w*x,cy+h*.48,10);
-            }
-
-            /* 左右の装飾屋根 */
-            line(cx-w*.80,cy-h*.30,cx-w*.70,cy-h*.18,12);
-            line(cx+w*.80,cy-h*.30,cx+w*.70,cy-h*.18,12);
-
-            /* 中央顶端 */
-            line(cx,cy-h*.55,cx,cy-h*.68,12);
-            ellipse(cx,cy-h*.70,s*.04,s*.04,16);
-
-            break;
-        }
-
-        case "栃木県_宇都宮餃子": {
-            /* 宇都宮餃子：中央に大きな焼き餃子を1個 */
-            const w = s * .78;
-            const h = s * .40;
-
-            /* ===== 大きな餃子本体 ===== */
-            poly([
-                {x:cx-w,      y:cy+h*.28},
-                {x:cx-w*.92,  y:cy+h*.02},
-                {x:cx-w*.72,  y:cy-h*.30},
-                {x:cx-w*.38,  y:cy-h*.52},
-                {x:cx,        y:cy-h*.63},
-                {x:cx+w*.38,  y:cy-h*.52},
-                {x:cx+w*.72,  y:cy-h*.30},
-                {x:cx+w*.92,  y:cy+h*.02},
-                {x:cx+w,      y:cy+h*.28},
-                {x:cx+w*.62,  y:cy+h*.52},
-                {x:cx,        y:cy+h*.58},
-                {x:cx-w*.62,  y:cy+h*.52}
-            ], 26);
-
-            /* ===== 上部褶皱 ===== */
-            for(let i=-3;i<=3;i++){
-                const px = cx + i*w*.19;
-                line(
-                    px,
-                    cy-h*.43,
-                    px + i*s*.015,
-                    cy-h*.05,
-                    10
-                );
-            }
-
-            /* ===== 饺子底边 ===== */
-            line(
-                cx-w*.60,
-                cy+h*.50,
-                cx,
-                cy+h*.58,
-                12
-            );
-            line(
-                cx,
-                cy+h*.58,
-                cx+w*.60,
-                cy+h*.50,
-                12
-            );
-
-            /* ===== 左右边缘 ===== */
-            line(
-                cx-w,
-                cy+h*.28,
-                cx-w*.78,
-                cy+h*.45,
-                12
-            );
-            line(
-                cx+w,
-                cy+h*.28,
-                cx+w*.78,
-                cy+h*.45,
-                12
-            );
-
-            break;
-        }
-
-        case "栃木県_いちご": {
-            /* いちご：参考写真のような、上が広く下が少し細い果実 */
-            const w = s * .62;
-            const h = s * .70;
-
-            /* ===== 果実 ===== */
-            poly([
-                {x:cx-s*.04, y:cy-h*.98},
-                {x:cx-w*.40, y:cy-h*.90},
-                {x:cx-w*.72, y:cy-h*.65},
-                {x:cx-w*.88, y:cy-h*.25},
-                {x:cx-w*.84, y:cy+h*.18},
-                {x:cx-w*.65, y:cy+h*.58},
-                {x:cx-w*.35, y:cy+h*.86},
-                {x:cx,      y:cy+h},
-                {x:cx+w*.32, y:cy+h*.84},
-                {x:cx+w*.62, y:cy+h*.56},
-                {x:cx+w*.82, y:cy+h*.14},
-                {x:cx+w*.84, y:cy-h*.22},
-                {x:cx+w*.67, y:cy-h*.60},
-                {x:cx+w*.35, y:cy-h*.86}
-            ], 24);
-
-            /* ===== 上方叶冠：略微向左展开 ===== */
-            poly([
-                {x:cx-s*.05, y:cy-h*.92},
-                {x:cx-s*.18, y:cy-h*1.12},
-                {x:cx-s*.44, y:cy-h*1.06},
-                {x:cx-s*.60, y:cy-h*.84},
-                {x:cx-s*.42, y:cy-h*.82},
-                {x:cx-s*.68, y:cy-h*.74},
-                {x:cx-s*.46, y:cy-h*.62},
-                {x:cx-s*.20, y:cy-h*.76},
-                {x:cx-s*.05, y:cy-h*.88},
-                {x:cx+s*.12, y:cy-h*.72},
-                {x:cx+s*.34, y:cy-h*.78},
-                {x:cx+s*.21, y:cy-h*.96}
-            ], 18);
-
-            /* ===== 种子：密集但保持可读性 ===== */
-            const seeds = [
-                [-.40,-.66],[-.18,-.73],[.05,-.68],[.27,-.58],[.46,-.42],
-                [-.55,-.36],[-.34,-.30],[-.10,-.37],[.14,-.30],[.36,-.18],[.58,-.05],
-                [-.62,-.05],[-.40,.03],[-.18,-.01],[.05,.05],[.29,.08],[.50,.18],
-                [-.53,.25],[-.30,.25],[-.08,.29],[.15,.30],[.37,.34],
-                [-.40,.49],[-.16,.52],[.08,.54],[.29,.55],
-                [-.20,.73],[.05,.75]
-            ];
-
-            for(const [sx,sy] of seeds){
-                const px = cx + w*sx;
-                const py = cy + h*sy;
-                ellipse(
-                    px,
-                    py,
-                    s*.018,
-                    s*.034,
-                    18
-                );
-            }
-
-            /* ===== 果实中央轻微的高光线 ===== */
-            line(
-                cx-w*.12,
-                cy-h*.70,
-                cx-w*.02,
-                cy-h*.42,
-                7
-            );
-
-            break;
-        }
-
-        case "茨城県_牛久大仏": {
-            /* 牛久大仏：参考写真の「高くまっすぐ立つ仏像」を簡略化 */
-            const w=s*.62;
-            const h=s*1.18;
-
-            /* ===== 台座 ===== */
-            line(
-                cx-w*.78,cy+h*.58,
-                cx+w*.78,cy+h*.58,
-                24
-            );
-
-            /* 莲花座 */
-            for(let i=-4;i<=4;i++){
-                const px=cx+i*w*.19;
-                const top=cy+h*.38-Math.abs(i)*s*.015;
-                poly([
-                    {x:px-w*.14,y:cy+h*.56},
-                    {x:px,y:top},
-                    {x:px+w*.14,y:cy+h*.56}
-                ],16);
-            }
-
-            /* ===== 佛像身体／长袍 ===== */
-            poly([
-                {x:cx-w*.24,y:cy-h*.18},
-                {x:cx-w*.37,y:cy+h*.22},
-                {x:cx-w*.45,y:cy+h*.55},
-                {x:cx,y:cy+h*.62},
-                {x:cx+w*.45,y:cy+h*.55},
-                {x:cx+w*.37,y:cy+h*.22},
-                {x:cx+w*.24,y:cy-h*.18}
-            ],24);
-
-            /* 左袖＋抬起的手 */
-            line(cx-w*.20,cy-h*.08,cx-w*.45,cy+h*.10,18);
-            line(cx-w*.45,cy+h*.10,cx-w*.48,cy-h*.22,16);
-            ellipse(cx-w*.49,cy-h*.29,s*.10,s*.13,28);
-
-            for(let i=-2;i<=2;i++){
-                line(
-                    cx-w*.49+i*s*.035,
-                    cy-h*.39,
-                    cx-w*.49+i*s*.035,
-                    cy-h*.54,
-                    7
-                );
-            }
-
-            /* 右袖＋向下的手 */
-            line(cx+w*.20,cy-h*.08,cx+w*.43,cy+h*.25,18);
-            line(cx+w*.43,cy+h*.25,cx+w*.42,cy+h*.40,15);
-            ellipse(cx+w*.43,cy+h*.42,s*.10,s*.08,24);
-
-            /* ===== 头部 ===== */
-            ellipse(cx,cy-h*.49,s*.18,s*.20,42);
-            ellipse(cx,cy-h*.68,s*.12,s*.12,28);
-            ellipse(cx-s*.17,cy-h*.48,s*.035,s*.07,18);
-            ellipse(cx+s*.17,cy-h*.48,s*.035,s*.07,18);
-
-            /* ===== 面部极简细节 ===== */
-            line(cx-s*.10,cy-h*.46,cx-s*.04,cy-h*.44,7);
-            line(cx+s*.04,cy-h*.44,cx+s*.10,cy-h*.46,7);
-            line(cx,cy-h*.45,cx,cy-h*.35,6);
-            line(cx-s*.05,cy-h*.32,cx+s*.05,cy-h*.32,7);
-
-            /* ===== 袍服纵向褶线 ===== */
-            for(let i=-2;i<=2;i++){
-                line(
-                    cx+i*s*.08,
-                    cy-h*.14,
-                    cx+i*s*.10,
-                    cy+h*.48,
-                    7
-                );
-            }
-
-            break;
-        }
-
-        case "茨城県_納豆": {
-            /* 纳豆：参考照片的大碗＋很多颗大豆＋少量纳豆拉丝 */
-            const bw=s*.82;
-            const bh=s*.25;
-
-            /* ===== 碗口 ===== */
-            ellipse(cx,cy-s*.14,bw,bh,90);
-
-            /* 碗身 */
-            line(cx-bw,cy-s*.14,cx-bw*.72,cy+s*.48,24);
-            line(cx+bw,cy-s*.14,cx+bw*.72,cy+s*.48,24);
-            line(cx-bw*.72,cy+s*.48,cx+bw*.72,cy+s*.48,24);
-
-            /* ===== 大豆 ===== */
-            const beans=[
-                [-.56,-.16,.10],[-.38,-.23,.09],[-.18,-.20,.105],[.02,-.23,.10],[.22,-.18,.095],[.42,-.20,.10],[.58,-.12,.09],
-                [-.48,-.03,.10],[-.28,-.01,.09],[-.07,-.03,.105],[.14,-.02,.10],[.34,-.03,.09],[.53,.02,.095],
-                [-.42,.11,.095],[-.20,.13,.09],[.02,.11,.10],[.23,.13,.09],[.44,.12,.095],
-                [-.31,.23,.09],[-.05,.22,.10],[.20,.23,.09]
-            ];
-
-            for(const [bx,by,br] of beans){
-                ellipse(
-                    cx+s*bx,
-                    cy+s*by,
-                    s*br,
-                    s*br*.70,
-                    20
-                );
-            }
-
-            /* 少量拉丝 */
-            line(cx-s*.18,cy-s*.01,cx-s*.47,cy-s*.30,6);
-            line(cx-s*.02,cy+s*.03,cx+s*.27,cy-s*.26,6);
-            line(cx+s*.16,cy+s*.08,cx+s*.48,cy-s*.08,6);
-
-            break;
-        }
-
-        case "茨城県_梅": {
-            /* 梅：参考照片的五瓣白梅＋黄色花药＋枝 */
-            const r=s*.36;
-
-            /* ===== 五片花瓣 ===== */
-            for(let i=0;i<5;i++){
-                const a=-Math.PI/2+i*Math.PI*2/5;
-                ellipse(
-                    cx+Math.cos(a)*r*.68,
-                    cy+Math.sin(a)*r*.68,
-                    r*.43,
-                    r*.32,
-                    30
-                );
-            }
-
-            /* ===== 花心 ===== */
-            ellipse(cx,cy,r*.13,r*.13,18);
-
-            for(let i=0;i<10;i++){
-                const a=i*Math.PI*2/10;
-                line(
-                    cx+Math.cos(a)*r*.07,
-                    cy+Math.sin(a)*r*.07,
-                    cx+Math.cos(a)*r*.28,
-                    cy+Math.sin(a)*r*.28,
-                    6
-                );
-            }
-
-            /* ===== 枝 ===== */
-            line(cx-s*.82,cy+s*.48,cx-s*.22,cy+s*.14,15);
-            line(cx-s*.22,cy+s*.14,cx+s*.25,cy-s*.12,13);
-            line(cx+s*.25,cy-s*.12,cx+s*.68,cy-s*.42,10);
-
-            /* 花蕾 */
-            ellipse(cx+s*.55,cy-s*.32,s*.09,s*.11,18);
-
-            break;
-        }
-
-        case "千葉県_日本なし": {
-            /* 日本なし：丸く大きな実＋上部のくぼみ＋葉と枝 */
-            const r = s * .42;
-
-            /* 果実の外輪郭 */
-            const pear = [];
-            for(let i=0;i<70;i++){
-                const t = Math.PI * 2 * i / 70;
-                const top = Math.max(0, -Math.sin(t));
-                const width = r * (0.93 - 0.16 * top);
-                const y = r * 0.95 * Math.sin(t);
-                pear.push({
-                    x: cx + width * Math.cos(t),
-                    y: cy + y
-                });
-            }
-            for(const p of pear) points.push(p);
-
-            /* 上部のくぼみ */
-            line(cx-s*.13,cy-s*.41,cx,cy-s*.47,14);
-            line(cx,cy-s*.47,cx+s*.13,cy-s*.41,14);
-
-            /* 枝 */
-            line(cx,cy-s*.44,cx+s*.18,cy-s*.70,12);
-            line(cx+s*.18,cy-s*.70,cx+s*.38,cy-s*.79,10);
-
-            /* 葉 */
-            poly([
-                {x:cx+s*.15,y:cy-s*.66},
-                {x:cx+s*.38,y:cy-s*.82},
-                {x:cx+s*.48,y:cy-s*.65},
-                {x:cx+s*.25,y:cy-s*.59}
-            ], 14);
-
-            break;
-        }
-
-        case "千葉県_落花生": {
-            /* 落花生：一粒のさやを大きく見せる */
-            const r=s*.50;
-
-            /* さやの二つの膨らみ */
-            ellipse(cx-s*.22,cy+s*.02,r*.68,r*.50,58);
-            ellipse(cx+s*.22,cy+s*.02,r*.68,r*.50,58);
-
-            /* 中央のくびれ */
-            line(cx,cy-s*.38,cx,cy+s*.40,12);
-
-            /* さやの表面の凹凸 */
-            for(let i=-2;i<=2;i++){
-                line(
-                    cx-s*.46,
-                    cy+s*(i*.11),
-                    cx-s*.16,
-                    cy+s*(i*.15),
-                    8
-                );
-                line(
-                    cx+s*.16,
-                    cy+s*(i*.15),
-                    cx+s*.46,
-                    cy+s*(i*.11),
-                    8
-                );
-            }
-
-            break;
-        }
-
-        case "千葉県_菜の花": {
-            /* 菜の花：一本の茎と上部にまとまった小花 */
-            line(cx,cy+s*.78,cx,cy-s*.15,14);
-            line(cx,cy+s*.45,cx-s*.22,cy+s*.18,10);
-            line(cx,cy+s*.28,cx+s*.24,cy+s*.02,10);
-
-            const flowers=[
-                [-.24,-.32], [0,-.42], [.23,-.30],
-                [-.12,-.12], [.12,-.08]
-            ];
-
-            for(const [fx,fy] of flowers){
-                const x=cx+s*fx;
-                const y=cy+s*fy;
-
-                for(let i=0;i<4;i++){
-                    const a=i*Math.PI/2;
-                    ellipse(
-                        x+Math.cos(a)*s*.085,
-                        y+Math.sin(a)*s*.085,
-                        s*.10,
-                        s*.065,
-                        28
-                    );
-                }
-
-                ellipse(x,y,s*.045,s*.045,18);
-            }
-
-            break;
-        }
-
-
-        case "神奈川県_横浜赤レンガ倉庫": {
-            /* 横浜赤レンガ倉庫：二棟の赤レンガ倉庫 */
-            const w=s*1.02;
-            const h=s*.88;
-
-            for(let side of [-1,1]){
-                const ox=cx+side*s*.34;
-                const ow=w*.42;
-
-                /* 建物本体 */
-                line(ox-ow*.48,cy+h*.48,ox-ow*.48,cy-h*.20,20);
-                line(ox+ow*.48,cy+h*.48,ox+ow*.48,cy-h*.20,20);
-                line(ox-ow*.48,cy+h*.48,ox+ow*.48,cy+h*.48,24);
-
-                /* 屋顶 */
-                poly([
-                    {x:ox-ow*.54,y:cy-h*.20},
-                    {x:ox-ow*.40,y:cy-h*.34},
-                    {x:ox+ow*.40,y:cy-h*.34},
-                    {x:ox+ow*.54,y:cy-h*.20}
-                ],18);
-
-                /* 小塔／屋顶中央 */
-                line(ox,cy-h*.34,ox,cy-h*.48,12);
-                ellipse(ox,cy-h*.51,s*.035,s*.035,14);
-
-                /* 窗 */
-                for(let i=-1;i<=1;i++){
-                    const xx=ox+i*ow*.23;
-                    line(xx-s*.055,cy-h*.02,xx-s*.055,cy+h*.22,10);
-                    line(xx+s*.055,cy-h*.02,xx+s*.055,cy+h*.22,10);
-                    line(xx-s*.055,cy+h*.10,xx+s*.055,cy+h*.10,8);
-                }
-
-                /* 红砖的层次线 */
-                line(ox-ow*.44,cy+h*.28,ox+ow*.44,cy+h*.28,8);
-                line(ox-ow*.44,cy+h*.02,ox+ow*.44,cy+h*.02,8);
-            }
-
-            break;
-        }
-
-        case "神奈川県_横浜シュウマイ": {
-            /* 横浜シュウマイ：一个大烧卖 */
-            const w=s*.48;
-            const h=s*.34;
-
-            /* 伞状顶部＋圆润底部 */
-            poly([
-                {x:cx-w*.92,y:cy-h*.05},
-                {x:cx-w*.62,y:cy-h*.38},
-                {x:cx-w*.20,y:cy-h*.50},
-                {x:cx+w*.20,y:cy-h*.50},
-                {x:cx+w*.62,y:cy-h*.38},
-                {x:cx+w*.92,y:cy-h*.05},
-                {x:cx+w*.72,y:cy+h*.50},
-                {x:cx-w*.72,y:cy+h*.50}
-            ],24);
-
-            /* 褶皱 */
-            for(let i=-2;i<=2;i++){
-                line(
-                    cx+i*s*.14,
-                    cy-h*.32,
-                    cx+i*s*.10,
-                    cy+h*.34,
-                    9
-                );
-            }
-
-            /* 中央肉馅 */
-            ellipse(cx,cy-s*.12,s*.13,s*.07,16);
-
-            break;
-        }
-
-        case "神奈川県_カモメ": {
-            /* カモメ：展开的翅膀 */
-            poly([
-                {x:cx-s*.72,y:cy-s*.10},
-                {x:cx-s*.40,y:cy-s*.18},
-                {x:cx-s*.12,y:cy-s*.02},
-                {x:cx,y:cy+s*.05},
-                {x:cx+s*.12,y:cy-s*.02},
-                {x:cx+s*.40,y:cy-s*.18},
-                {x:cx+s*.72,y:cy-s*.10},
-                {x:cx+s*.48,y:cy+s*.05},
-                {x:cx+s*.25,y:cy+s*.15},
-                {x:cx,y:cy+s*.10},
-                {x:cx-s*.25,y:cy+s*.15},
-                {x:cx-s*.48,y:cy+s*.05}
-            ],20);
-
-            /* 头部 */
-            ellipse(cx,cy+s*.02,s*.10,s*.10,18);
-
-            /* 尾部 */
-            line(cx-s*.07,cy+s*.07,cx-s*.20,cy+s*.20,10);
-            line(cx+s*.07,cy+s*.07,cx+s*.20,cy+s*.20,10);
-
-            break;
-        }
-
-        case "新潟県_萬代橋": {
-            /* 萬代橋：六つのアーチを持つ横長の石橋 */
-            const w=s*1.15;
-            const h=s*.48;
-
-            /* 上部の橋面 */
-            line(cx-w,cy-h*.20,cx+w,cy-h*.20,24);
-            line(cx-w,cy-h*.05,cx+w,cy-h*.05,18);
-
-            /* 六つのアーチ */
-            const archXs=[-0.82,-0.49,-0.16,0.16,0.49,0.82];
-            for(const ax of archXs){
-                const x=cx+w*ax;
-                const aw=w*.20;
-                poly([
-                    {x:x-aw,y:cy-h*.05},
-                    {x:x-aw*.72,y:cy+h*.32},
-                    {x:x,y:cy+h*.52},
-                    {x:x+aw*.72,y:cy+h*.32},
-                    {x:x+aw,y:cy-h*.05}
-                ],16);
-            }
-
-            /* 両端の欄干 */
-            line(cx-w,cy-h*.20,cx-w,cy-h*.42,14);
-            line(cx+w,cy-h*.20,cx+w,cy-h*.42,14);
-            line(cx-w,cy-h*.42,cx+w,cy-h*.42,14);
-
-            break;
-        }
-
-        case "新潟県_笹団子": {
-            /* 笹団子：笹の葉で包まれた楕円形の団子 */
-            const w=s*.72;
-            const h=s*.28;
-
-            /* 笹の葉 */
-            poly([
-                {x:cx-w*.95,y:cy+h*.18},
-                {x:cx-w*.52,y:cy-h*.40},
-                {x:cx,y:cy-h*.55},
-                {x:cx+w*.52,y:cy-h*.40},
-                {x:cx+w*.95,y:cy+h*.18},
-                {x:cx+w*.45,y:cy+h*.05},
-                {x:cx,y:cy+h*.32},
-                {x:cx-w*.45,y:cy+h*.05}
-            ],16);
-
-            /* 团子本体 */
-            ellipse(cx,cy+h*.02,w*.52,h*.62,55);
-
-            /* 叶面中脉 */
-            line(cx,cy-h*.45,cx,cy+h*.33,9);
-
-            /* 简单的包裹折线 */
-            line(cx-w*.32,cy-h*.15,cx-w*.10,cy+h*.22,8);
-            line(cx+w*.32,cy-h*.15,cx+w*.10,cy+h*.22,8);
-
-            break;
-        }
-
-        case "新潟県_米": {
-            /* 新潟米：一粒の米だけを大きく見せる */
-            const x = cx;
-            const y = cy;
-            const rw = s * .16;
-            const rh = s * .34;
-            const rot = -0.16;
-            const cr = Math.cos(rot);
-            const sr = Math.sin(rot);
-
-            /* 米粒：両端が尖り、中央がふくらむ形 */
-            const pts = [
-                [-rw*.05,-rh],
-                [ rw*.56,-rh*.62],
-                [ rw*.72,-rh*.05],
-                [ rw*.50, rh*.58],
-                [ rw*.05, rh],
-                [-rw*.50, rh*.58],
-                [-rw*.72, rh*.05],
-                [-rw*.56,-rh*.62]
-            ].map(([px,py])=>({
-                x:x + px*cr - py*sr,
-                y:y + px*sr + py*cr
-            }));
-
-            poly(pts,24);
-
-            break;
-        }
-
-        case "東京都_東京タワー": {
-            /* 東京タワー：三角形の鉄塔＋展望デッキ＋頂部アンテナ */
-            const h=s*1.08;
-            const w=s*.58;
-
-            /* 外形 */
-            line(cx-w*.72,cy+h*.62,cx-w*.18,cy-h*.78,20);
-            line(cx+w*.72,cy+h*.62,cx+w*.18,cy-h*.78,20);
-
-            /* 中央支柱 */
-            line(cx,cy+h*.55,cx,cy-h*.88,12);
-
-            /* 展望デッキ */
-            line(cx-w*.40,cy-h*.15,cx+w*.40,cy-h*.15,18);
-            line(cx-w*.34,cy+h*.02,cx+w*.34,cy+h*.02,16);
-
-            /* 鉄骨の斜線 */
-            for(let i=0;i<4;i++){
-                const yy=cy+h*(.38-i*.20);
-                line(cx-w*(.58-i*.12),yy,cx+w*(.58-i*.12),yy-s*.04,10);
-            }
-
-            /* 頂部 */
-            line(cx-w*.18,cy-h*.78,cx+w*.18,cy-h*.78,14);
-            line(cx,cy-h*.78,cx,cy-h*1.06,12);
-            ellipse(cx,cy-h*1.09,s*.035,s*.035,14);
-
-            break;
-        }
-
-        case "東京都_江戸前寿司": {
-            /* 江戸前寿司：一貫のにぎりを大きく簡略化 */
-            const bw=s*.42;
-            const bh=s*.16;
-
-            /* シャリ */
-            poly([
-                {x:cx-bw,y:cy+s*.05},
-                {x:cx-bw*.78,y:cy+s*.24},
-                {x:cx-bw*.48,y:cy+s*.35},
-                {x:cx+bw*.48,y:cy+s*.35},
-                {x:cx+bw*.78,y:cy+s*.24},
-                {x:cx+bw,y:cy+s*.05},
-                {x:cx+bw*.72,y:cy-s*.10},
-                {x:cx-bw*.72,y:cy-s*.10}
-            ], 20);
-
-            /* ネタ */
-            poly([
-                {x:cx-bw*.76,y:cy-s*.11},
-                {x:cx-bw*.58,y:cy-s*.24},
-                {x:cx,y:cy-s*.28},
-                {x:cx+bw*.58,y:cy-s*.24},
-                {x:cx+bw*.76,y:cy-s*.11},
-                {x:cx+bw*.58,y:cy-s*.01},
-                {x:cx-bw*.58,y:cy-s*.01}
-            ], 22);
-
-            /* ネタの筋 */
-            line(cx-bw*.45,cy-s*.17,cx-bw*.18,cy-s*.09,8);
-            line(cx-bw*.10,cy-s*.21,cx+bw*.17,cy-s*.13,8);
-            line(cx+bw*.22,cy-s*.18,cx+bw*.45,cy-s*.10,8);
-
-            break;
-        }
-
-        case "東京都_山手線": {
-            /* 山手線：大きな環状線＋車両 */
-            const r=s*.64;
-
-            /* 環状線 */
-            const count=72;
-            for(let i=0;i<count;i++){
-                const a=Math.PI*2*i/count;
-                const x1=cx+Math.cos(a)*r;
-                const y1=cy+Math.sin(a)*r;
-                const a2=Math.PI*2*(i+1)/count;
-                const x2=cx+Math.cos(a2)*r;
-                const y2=cy+Math.sin(a2)*r;
-                line(x1,y1,x2,y2,12);
-            }
-
-            /* 車両 */
-            const tw=s*.46;
-            const th=s*.22;
-            poly([
-                {x:cx-tw*.60,y:cy-th*.48},
-                {x:cx+tw*.60,y:cy-th*.48},
-                {x:cx+tw*.60,y:cy+th*.48},
-                {x:cx-tw*.60,y:cy+th*.48}
-            ],18);
-
-            /* 窓 */
-            for(let i=-1;i<=1;i++){
-                const xx=cx+i*tw*.30;
-                line(xx-tw*.10,cy-th*.18,xx-tw*.10,cy+th*.18,8);
-                line(xx+tw*.10,cy-th*.18,xx+tw*.10,cy+th*.18,8);
-            }
-
-            /* 車輪 */
-            ellipse(cx-tw*.38,cy+th*.50,s*.07,s*.07,12);
-            ellipse(cx+tw*.38,cy+th*.50,s*.07,s*.07,12);
-
+            ellipse(cx+s*.02,cy+s*.22,s*.48,s*.28,65);
+            line(cx-s*.32,cy+s*.10,cx-s*.48,cy-s*.48,28);
+            line(cx-s*.48,cy-s*.48,cx-s*.30,cy-s*.70,20);
+            ellipse(cx-s*.30,cy-s*.66,s*.22,s*.20,40);
+            poly([{x:cx-s*.46,y:cy-s*.76},{x:cx-s*.62,y:cy-s*.90},{x:cx-s*.55,y:cy-s*.66}],14);
+            poly([{x:cx-s*.15,y:cy-s*.76},{x:cx-s*.03,y:cy-s*.90},{x:cx-s*.05,y:cy-s*.65}],14);
+            line(cx-s*.50,cy-s*.67,cx-s*.67,cy-s*.62,12);
+            line(cx+s*.46,cy+s*.10,cx+s*.72,cy-s*.05,18);
+            line(cx+s*.72,cy-s*.05,cx+s*.78,cy-s*.18,14);
+            line(cx-s*.25,cy+s*.43,cx-s*.30,cy+s*.72,14);
+            line(cx+s*.20,cy+s*.43,cx+s*.25,cy+s*.72,14);
             break;
         }
 
@@ -4827,17 +3534,91 @@ function render(
 ) {
 
 
+    const visualScale =
+        p.visualScale !== undefined
+            ? p.visualScale
+            : 1;
+
     p.el.style.transform =
         `translate3d(
             ${p.x}px,
             ${p.y}px,
             0
-        )`;
+        ) scale(${visualScale})`;
 
 
     p.el.style.opacity =
         p.opacity;
 
+}
+
+
+/* =====================================================
+   恢复初始状态
+===================================================== */
+
+function beginReset() {
+
+    if (!started || resetRequested) return;
+
+    resetRequested = true;
+    phase = "resetting";
+    phaseStart = performance.now();
+
+    restartButton.classList.remove("show");
+
+    // 所有文字从当前位置向画面外飞出
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+
+    particles.forEach(p => {
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const speed = 3 + Math.random() * 3;
+        p.vx = (dx / d) * speed;
+        p.vy = (dy / d) * speed;
+        p.active = false;
+    });
+}
+
+
+function restoreInitialState() {
+
+    particles.forEach(p => {
+        if (p.el) p.el.remove();
+    });
+
+    particles = [];
+    targetPoints = [];
+    regionalShapeIndex = 0;
+    completedShapeCount = 0;
+    resetRequested = false;
+    started = false;
+    phase = "wander";
+    phaseStart = 0;
+    lastTime = 0;
+
+    shrinkTextLayer.textContent = "";
+    shrinkTextLayer.style.display = "none";
+    shrinkTextLayer.style.transform = "scale(1)";
+
+    input.classList.remove("ui-fade-out", "ui-text-hidden");
+    charCount.classList.remove("ui-fade-out");
+    startButton.classList.remove("ui-fade-out");
+    inputArea.style.display = "flex";
+    inputArea.style.opacity = "0";
+    requestAnimationFrame(() => { inputArea.style.opacity = "1"; });
+    input.value = "";
+    input.style.color = "";
+    input.style.height = "";
+
+    updateInputHeight();
+    updateCharCount();
+
+    restartButton.classList.remove("show");
+
+    startSubtitles();
 }
 
 
@@ -4879,10 +3660,123 @@ function loop(
 
 
     /* =================================================
-       ① 迷路
+       ① 恢复初始状态：文字飞出
     ================================================= */
 
     if (
+        phase === "resetting"
+    ) {
+
+        const t = Math.min(elapsed / RESET_TIME, 1);
+
+        particles.forEach(p => {
+            p.x += p.vx * delta;
+            p.y += p.vy * delta;
+            p.vx *= 1.035;
+            p.vy *= 1.035;
+            p.opacity = 1 - t;
+            render(p);
+        });
+
+        if (elapsed >= RESET_TIME) {
+            restoreInitialState();
+        }
+    }
+
+    /* =================================================
+       ② 点击后原地缩小
+    ================================================= */
+
+    else if (
+        phase === "shrinking"
+    ) {
+
+        const t =
+            Math.min(
+                elapsed / SHRINK_TIME,
+                1
+            );
+
+        const ease =
+            1 - Math.pow(
+                1 - t,
+                3
+            );
+
+        /*
+            整个文字层一起缩小。
+            18px → 10px 相当于整体 scale 10/18。
+        */
+        const scale =
+            1 - (8 / 18) * ease;
+
+        shrinkTextLayer.style.transform =
+            `scale(${scale})`;
+
+        if (
+            elapsed >= SHRINK_TIME
+        ) {
+
+            const finalScale =
+                10 / 18;
+
+            const center =
+                window.__inputShrinkCenter;
+
+            const chars =
+                window.__inputCharRects || [];
+
+            chars.forEach(p => {
+
+                /*
+                    以输入框中心为固定锚点，
+                    把每个字符的原始位置整体缩小。
+                    字符之间的相对位置完全保留。
+                */
+                const x =
+                    center.x +
+                    (p.x - center.x) * finalScale;
+
+                const y =
+                    center.y +
+                    (p.y - center.y) * finalScale;
+
+                createParticle(
+                    p.char,
+                    x,
+                    y
+                );
+
+            });
+
+            shrinkTextLayer.style.display =
+                "none";
+
+            input.style.color =
+                "";
+
+            inputArea.style.display =
+                "none";
+
+            particles.forEach(p => {
+                p.visualScale = 1;
+            });
+
+            phase =
+                "wander";
+
+            phaseStart =
+                time;
+
+            restartButton.classList.add("show");
+        }
+    }
+
+    /* =================================================
+       ③ 迷路
+    ================================================= */
+
+    else if (
         phase === "wander"
     ) {
 
@@ -5013,13 +3907,8 @@ function loop(
             FORM_TIME
         ) {
 
-
-            dissolve();
-
-
             phase =
-                "dissolving";
-
+                "holding";
 
             phaseStart =
                 time;
@@ -5030,7 +3919,37 @@ function loop(
 
 
     /* =================================================
-       ③ 溃散
+       ③ 图形保持
+    ================================================= */
+
+    else if (
+        phase === "holding"
+    ) {
+
+        particles.forEach(
+            p => render(p)
+        );
+
+        if (
+            elapsed >=
+            HOLD_TIME
+        ) {
+
+            dissolve();
+
+            phase =
+                "dissolving";
+
+            phaseStart =
+                time;
+
+        }
+
+    }
+
+
+    /* =================================================
+       ④ 溃散
     ================================================= */
 
     else if (
@@ -5116,22 +4035,25 @@ function loop(
         ) {
 
 
-            // 3つの地域物件を永遠にループ
-            regionalShapeIndex =
-                (regionalShapeIndex + 1) %
-                regionalShapeList.length;
+            // 1画面終了
+            completedShapeCount++;
 
+            // 9画面（3つの図形を3周）終了後、自動で初期状態へ戻る
+            if (completedShapeCount >= 9) {
+                beginReset();
+            } else {
+                regionalShapeIndex =
+                    (regionalShapeIndex + 1) %
+                    regionalShapeList.length;
 
-            /* 图形之间不再进行 5 秒的文字游走，直接进入下一个图形 */
-            phase =
-                "forming";
+                phase =
+                    "forming";
 
+                phaseStart =
+                    time;
 
-            phaseStart =
-                time;
-
-
-            setShape();
+                setShape();
+            }
 
         }
 
@@ -5152,6 +4074,18 @@ function loop(
 startButton.addEventListener(
     "click",
     start
+);
+
+
+/* =====================================================
+   再介绍按钮
+===================================================== */
+
+restartButton.addEventListener(
+    "click",
+    () => {
+        beginReset();
+    }
 );
 
 
