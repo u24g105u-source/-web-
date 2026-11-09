@@ -7,7 +7,7 @@
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>マイゴ v1.8 - エンディング修正版</title>
+<title>マイゴ v1.9 - オープニング演出版</title>
 
 
 <style>
@@ -45,7 +45,7 @@ body {
 ===================================================== */
 
 #inputArea {
-    opacity: 1;
+    opacity: 0;
     transition: opacity 1s ease;
 
     position: fixed;
@@ -460,12 +460,99 @@ body {
     }
 }
 
+
+/* =====================================================
+   オープニング画面
+===================================================== */
+#openingSplash {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    opacity: 1;
+}
+#openingSplash .opening-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    padding: 24px;
+}
+#openingSplash .opening-logo,
+#openingSplash .opening-copy {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+#openingSplash .opening-logo {
+    display: block;
+    width: clamp(170px, 31vw, 280px);
+    height: auto;
+}
+#openingSplash .opening-copy {
+    margin: 0;
+    color: #111;
+    font-size: clamp(15px, 2vw, 20px);
+    font-weight: 400;
+    letter-spacing: .24em;
+    line-height: 1.6;
+    text-align: center;
+    transition-duration: 1s;
+}
+#openingSplash .opening-logo.is-visible,
+#openingSplash .opening-copy.is-visible {
+    opacity: 1;
+}
+#openingSplash.is-fading .opening-logo,
+#openingSplash.is-fading .opening-copy {
+    opacity: 0;
+    transition-duration: 1.5s;
+}
 </style>
 
 </head>
 
 
 <body>
+
+
+<!-- =====================================================
+     オープニング
+===================================================== -->
+<div id="openingSplash" aria-label="マイゴ">
+    <div class="opening-content">
+        <div class="opening-logo" aria-hidden="true">
+            <svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120.55 39.08">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+        stroke: #040000;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2px;
+      }
+    </style>
+  </defs>
+  <g id="_图层_1-2" data-name="图层 1">
+    <g>
+      <path class="cls-1" d="M1,1h38.95c4.09,0,6.14,4.95,3.25,7.84l-22.04,22.04,7.19,7.19"/>
+      <path class="cls-1" d="M62.51,1c4.09,0,6.14,4.95,3.25,7.84l-22.15,22.15"/>
+      <path class="cls-1" d="M79.25,1h20.04c2.54,0,4.59,2.06,4.59,4.59v27.89c0,2.54-2.06,4.59-4.59,4.59h-20.04"/>
+      <path class="cls-1" d="M107.12,1c2.54,0,4.59,2.06,4.59,4.59v5.25"/>
+      <path class="cls-1" d="M114.96,1c2.54,0,4.59,2.06,4.59,4.59v5.25"/>
+      <line class="cls-1" x1="13.97" y1="23.69" x2="21.16" y2="30.88"/>
+      <line class="cls-1" x1="59.8" y1="14.8" x2="59.8" y2="38.08"/>
+    </g>
+  </g>
+</svg>
+        </div>
+        <p class="opening-copy">迷いながら、つながっていく。</p>
+    </div>
+</div>
+
 
 
 <!-- =====================================================
@@ -4513,15 +4600,36 @@ updateCharCount();
 
 
 /*
-    页面打开后，直接在输入框内逐字输入マイゴ的自我介绍；
-    输入完成后等待5秒，再自动触发开始按钮。
-    动画结束返回输入页面后，重新开始30秒无操作计时。
+    ページを開くと、最初にLogoとコンセプトコピーを表示する。
+    しばらくしてロゴが白い画面へフェードアウトし、その後入力画面へ移行する。
+    入力画面が表示された後、マイゴの自己紹介を自動入力する。
 */
 stopSubtitles();
 inputArea.style.display = "flex";
-inputArea.style.pointerEvents = "auto";
-inputArea.style.opacity = "1";
-startAutoIntroTyping();
+inputArea.style.pointerEvents = "none";
+inputArea.style.opacity = "0";
+
+const openingSplash = document.getElementById("openingSplash");
+const openingLogo = openingSplash.querySelector(".opening-logo");
+const openingCopy = openingSplash.querySelector(".opening-copy");
+
+// ロゴを先にフェードインし、その後コンセプトコピーを表示する。
+requestAnimationFrame(() => {
+    openingLogo.classList.add("is-visible");
+});
+setTimeout(() => {
+    openingCopy.classList.add("is-visible");
+
+    // コピーが表示されてから2秒後、ロゴとコピーを同時にゆっくり消す。
+    setTimeout(() => {
+        openingSplash.classList.add("is-fading");
+        setTimeout(() => {
+            openingSplash.style.display = "none";
+            inputArea.style.pointerEvents = "auto";
+            startAutoIntroTyping();
+        }, 1500);
+    }, 2000);
+}, 1300);
 
 </script>
 
