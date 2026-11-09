@@ -7,7 +7,7 @@
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>マイゴ v1.5 - 新ロゴ統合版</title>
+<title>マイゴ v1.8 - エンディング修正版</title>
 
 
 <style>
@@ -286,7 +286,7 @@ body {
 }
 .subtitle.intro-line.show {
     opacity: .9;
-    transform: translate(-50%, 0);
+    transform: translate(-50%, -50%);
 }
 .subtitle.intro-line.hide {
     opacity: 0;
@@ -413,6 +413,53 @@ body {
 
 }
 
+
+/* =====================================================
+   エンディングメッセージ
+===================================================== */
+#endingMessage {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, calc(-50% + 10px));
+    width: min(90vw, 620px);
+    z-index: 80;
+    text-align: center;
+    color: #111;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s ease, transform 1s ease;
+}
+#endingMessage.show {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+#endingMessage .ending-main {
+    font-size: clamp(18px, 2.5vw, 27px);
+    line-height: 1.6;
+    letter-spacing: .08em;
+    font-weight: 500;
+}
+#endingMessage .ending-sub {
+    margin-top: 8px;
+    font-size: clamp(13px, 1.5vw, 16px);
+    line-height: 1.7;
+    letter-spacing: .04em;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .9s ease, transform .9s ease;
+}
+#endingMessage .ending-sub.show {
+    opacity: .72;
+    transform: translateY(0);
+}
+@media (max-height: 620px) {
+    #endingMessage {
+        top: auto;
+        bottom: 12vh;
+    }
+}
+
 </style>
 
 </head>
@@ -461,6 +508,11 @@ body {
 ===================================================== -->
 
 <div id="status"></div>
+
+<div id="endingMessage" aria-live="polite">
+    <div class="ending-main">ここが、わたしたちの居場所。</div>
+    <div class="ending-sub">そして、ここからつながっていく。</div>
+</div>
 
 
 
@@ -515,6 +567,20 @@ const shrinkTextLayer =
     document.getElementById(
         "shrinkTextLayer"
     );
+
+const endingMessage = document.getElementById("endingMessage");
+const endingSub = endingMessage.querySelector(".ending-sub");
+
+function showEndingMessage() {
+    endingMessage.classList.add("show");
+    // メインコピーのあとに、続く一文を少し遅れて表示する。
+    setTimeout(() => endingSub.classList.add("show"), 1100);
+}
+
+function hideEndingMessage() {
+    endingMessage.classList.remove("show");
+    endingSub.classList.remove("show");
+}
 
 
 let particles = [];
@@ -1237,18 +1303,16 @@ function start() {
         const prefecture =
             detectPrefecture(inputText);
 
-        // 都道府県が検出できない場合は、テスト図形を3回連続で表示する
+        // 都道府県が検出できない場合は、テスト図形を1回だけ表示する
         const testMode = !prefecture;
 
         regionalMode = true;
         regionalShapeList = testMode
-            ? ["テスト図形", "テスト図形", "テスト図形"]
+            ? ["テスト図形"]
             : regionalShapesByPrefecture[prefecture];
 
-        // 通常は地域図形を3周、テストモードはテスト図形を合計3回だけ表示
-        maxShapeCount = testMode
-            ? 3
-            : regionalShapeList.length * 3;
+        // 地域図形はリストの順番どおりに1周だけ表示する
+        maxShapeCount = regionalShapeList.length;
     } else {
         regionalMode = true;
         regionalShapeList = ["マイゴ_logo"];
@@ -3703,6 +3767,34 @@ function render(
    恢复初始状态
 ===================================================== */
 
+function startFinalFlyout(time) {
+    // 最後の図形が散ったあと、残っている文字・粒子をすべて画面外へ飛ばす。
+    restartButton.classList.remove("show");
+
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+
+    particles.forEach(p => {
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+        const speed = 5 + Math.random() * 4;
+        p.vx = (dx / distance) * speed;
+        p.vy = (dy / distance) * speed;
+        // 中心付近の文字も確実に画面外へ向かうよう、方向を少しばらけさせる。
+        if (distance < 40) {
+            const angle = Math.random() * Math.PI * 2;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+        }
+        p.active = false;
+    });
+
+    phase = "finalFlyout";
+    phaseStart = time;
+}
+
+
 function beginReset() {
 
     if (!started || resetRequested) return;
@@ -3712,6 +3804,7 @@ function beginReset() {
     phaseStart = performance.now();
 
     restartButton.classList.remove("show");
+    hideEndingMessage();
 
     // 所有文字从当前位置向画面外飞出
     const cx = window.innerWidth / 2;
@@ -3773,6 +3866,7 @@ function restoreInitialState() {
     updateCharCount();
 
     restartButton.classList.remove("show");
+    hideEndingMessage();
 
     startSubtitles();
     scheduleIdleIntro();
@@ -4088,28 +4182,59 @@ function loop(
         );
 
         if (autoLogoMode) {
-            // Logo完成后静止7秒，然后向画面外飞出，再返回输入页面。
-            if (elapsed >= 7000) beginReset();
-        } else if (
-            elapsed >=
-            HOLD_TIME
-        ) {
-
+            // 自動紹介のLogoも、表示後に飛び出してからエンディングへ進む。
+            if (elapsed >= HOLD_TIME) startFinalFlyout(time);
+        } else if (elapsed >= HOLD_TIME) {
+            // 図形は順番に散らす。最後の図形の後だけ、全ての文字を画面外へ飛ばす。
             dissolve();
-
-            phase =
-                "dissolving";
-
-            phaseStart =
-                time;
-
+            phase = "dissolving";
+            phaseStart = time;
         }
 
     }
 
 
     /* =================================================
-       ④ 溃散
+       ④ 最後の文字・粒子が画面外へ飛び出す
+    ================================================= */
+
+    else if (phase === "finalFlyout") {
+        const t = Math.min(elapsed / 1400, 1);
+
+        particles.forEach(p => {
+            p.x += p.vx * delta;
+            p.y += p.vy * delta;
+            p.vx *= 1.012;
+            p.vy *= 1.012;
+            p.opacity = 1 - t;
+            render(p);
+        });
+
+        // 全ての文字が消えてから、エンディングコピーを表示する。
+        if (elapsed >= 1400) {
+            particles.forEach(p => {
+                p.opacity = 0;
+                render(p);
+            });
+            showEndingMessage();
+            phase = "endingCopy";
+            phaseStart = time;
+        }
+    }
+
+
+    /* =================================================
+       ⑤ エンディングコピー
+    ================================================= */
+
+    else if (phase === "endingCopy") {
+        // 文字と図形が消えた画面にコピーだけを残し、余韻をつくる。
+        if (elapsed >= 5000) restoreInitialState();
+    }
+
+
+    /* =================================================
+       ⑥ 溃散
     ================================================= */
 
     else if (
@@ -4198,9 +4323,9 @@ function loop(
             // 1画面終了
             completedShapeCount++;
 
-            // 地域内の全図形を3周したら自動で初期状態へ戻る
+            // 最後の図形が散った後、残った文字をすべて画面外へ飛ばす。
             if (completedShapeCount >= maxShapeCount) {
-                beginReset();
+                startFinalFlyout(time);
             } else {
                 regionalShapeIndex =
                     (regionalShapeIndex + 1) %
@@ -4231,7 +4356,7 @@ function loop(
    输入框内自动输入自我介绍／完成后5秒自动点击开始
 ===================================================== */
 
-const maigoIntroFullText = "こんにちは！ぼくはマイゴ。言葉の中をさまよいながら、自分の居場所を探しているんだ。ねえ、きみのことも教えてくれない？";
+const maigoIntroFullText = "こんにちは！わたしはマイゴ。言葉の中をさまよいながら、自分の居場所を探しているんだ。ねえ、きみのことも教えてくれない？";
 
 function cancelAutoIntroTyping() {
     autoTypingInProgress = false;
